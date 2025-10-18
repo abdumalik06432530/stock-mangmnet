@@ -7,6 +7,8 @@ const authRoutes = require('./routes/auth');
 const itemsRoutes = require('./routes/items');
 const ordersRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/admin');
+const usersRoutes = require('./routes/users');
+const shopsRoutes = require('./routes/shops');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
@@ -19,6 +21,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/user', usersRoutes);
+app.use('/api/shops', shopsRoutes);
 
 // basic health
 app.get('/api/health', (req, res) => res.json({ ok: true }));
