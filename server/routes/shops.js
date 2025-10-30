@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Shop = require('../models/Shop');
 const Order = require('../models/Order');
+const Item = require('../models/Item');
 
 // GET /api/shops
 router.get('/', async (req, res) => {
@@ -10,6 +11,23 @@ router.get('/', async (req, res) => {
     res.json({ success: true, shops });
   } catch (err) {
     console.error('shops list', err);
+    res.status(500).json({ success: false, message: 'server_error' });
+  }
+});
+
+// GET /api/shops/:shopId/stock - return aggregated stock data (based on Item collection)
+router.get('/:shopId/stock', async (req, res) => {
+  try {
+    // For now, items are global; return item quantities keyed by type and model
+    const items = await Item.find().lean();
+    const stock = {};
+    items.forEach((it) => {
+      const key = it.model ? `${it.type}_${it.model}` : it.type;
+      stock[key] = it.quantity || 0;
+    });
+    return res.json({ success: true, stock });
+  } catch (err) {
+    console.error('shop stock error', err);
     res.status(500).json({ success: false, message: 'server_error' });
   }
 });

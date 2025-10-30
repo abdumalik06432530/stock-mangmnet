@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import Navbar from "./components/Navbar";
+import FactorySidebar from "./components/factorysidebar";
 import Sidebar from "./components/Sidebar";
 import ShopSidebar from "./components/ShopSidebar";
-import FactorySidebar from "./components/factorysidebar";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Add from "./pages/Admin/Add";
 import List from "./pages/Admin/List";
 import Dashboard from "./pages/Admin/dashboard";
@@ -15,9 +15,10 @@ import DashboardOverview from "./pages/Shoapkeprs/DashboardOverview";
 import OrderManagement from "./pages/Shoapkeprs/OrderManagement";
 import StockControl from "./pages/Shoapkeprs/StockControl";
 import SalesManagement from "./pages/Shoapkeprs/SalesManagement";
-import FactoryManager from "./pages/factorymangers/FactoryManager";
+import FactoryManagerDashboard from "./pages/factorymangers/FactoryManagerDashboard";
+import Drivers from "./pages/factorymangers/Drivers";
 import Login from "./components/Login";
-import AdminRegister from "./components/AdminRegister";
+// AdminRegister not used; removed to avoid unused import warning
 import Register from "./components/Register";
 import AccessoriesPage from "./pages/Admin/AccessoriesPage";
 import ItemRequests from "./pages/Admin/ItemRequests";
@@ -30,6 +31,8 @@ const App = () => {
   const [token, setToken] = useState(
     localStorage.getItem("token") ? localStorage.getItem("token") : ""
   );
+
+  const location = useLocation();
 
   // Resolve current shopId from localStorage/user (used for shopkeeper pages)
   const shopId = (() => {
@@ -63,22 +66,15 @@ const App = () => {
           <Navbar setToken={setToken} />
           <hr />
           <div className="flex w-full">
-            {/* Render ShopSidebar for shopkeepers, normal Sidebar for admins/others */}
+            {/* Choose sidebar based on current path: admin pages use Sidebar, factory/shop pages use FactorySidebar */}
             {(() => {
-              try {
-                const u = localStorage.getItem('user');
-                const user = u ? JSON.parse(u) : null;
-                if (user && user.role === 'shopkeeper') {
-                  return <ShopSidebar shopId={(user.shops && user.shops[0] && user.shops[0]._id) || (user.shops && user.shops[0]) || ''} onFetchItems={() => {}} onFetchStock={() => {}} onSubmitOrder={() => {}} onFetchOrders={() => {}} onScrollToSales={() => {}} />;
-                }
-                if (user && user.role === 'factory') {
-                  return <FactorySidebar orders={[]} />;
-                }
-              } catch (e) {
-                // ignore
-              }
-              return <Sidebar />;
+              const p = location?.pathname || '';
+              // shopkeeper pages use ShopSidebar; factory and /shops routes use FactorySidebar; admin uses main Sidebar
+              if (p.startsWith('/shopkeepers')) return <ShopSidebar shopId={shopId} />;
+              const useFactory = p.startsWith('/shops') || p.startsWith('/factory');
+              return useFactory ? <FactorySidebar /> : <Sidebar />;
             })()}
+
             <div className="w-[70%] mx-auto ml-[max(5vw,25px)] my-8 text-gray-600 text-base">
               <Routes>
                 <Route path="/add" element={<Add token={token} />} />
@@ -95,7 +91,11 @@ const App = () => {
                 <Route path="/shopkeepers/stock" element={<StockControl token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/request-item" element={<RequestItem token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/sales" element={<SalesManagement token={token} shopId={shopId} />} />
-                <Route path="/factory" element={<FactoryManager token={token} />} />
+                <Route path="/factory" element={<FactoryManagerDashboard token={token} />} />
+                <Route path="/shops/dashboard" element={<FactoryManagerDashboard token={token} />} />
+                <Route path="/shops/orders" element={<FactoryManagerDashboard token={token} />} />
+                <Route path="/shops/stock-management" element={<FactoryManagerDashboard token={token} />} />
+                <Route path="/shops/drivers" element={<Drivers token={token} />} />
               </Routes>
             </div>
           </div>

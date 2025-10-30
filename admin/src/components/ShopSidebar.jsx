@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { Package, Store, ShoppingCart, DollarSign, User } from 'lucide-react';
+import { Package, Store, ShoppingCart, DollarSign } from 'lucide-react';
 
 const ShopSidebar = ({ shopId, onFetchStock, onFetchOrders, onScrollToSales }) => {
   return (
@@ -12,13 +12,6 @@ const ShopSidebar = ({ shopId, onFetchStock, onFetchOrders, onScrollToSales }) =
 
       {/* Navigation */}
       <nav className="flex flex-row sm:flex-col gap-2 sm:gap-3 sm:mt-4 px-2 sm:px-5 text-sm font-semibold overflow-x-auto sm:overflow-x-visible">
-        {/* Shopkeeper top-level dashboard (ShopkeeperDashboard.jsx) */}
-        <ShopSidebarLink
-          to="/shopkeepers"
-          icon={User}
-          label="Shop Dashboard"
-          emoji="🏬"
-        />
 
         {/* More detailed overview (DashboardOverview.jsx) */}
         <ShopSidebarLink
@@ -64,36 +57,9 @@ const ShopSidebar = ({ shopId, onFetchStock, onFetchOrders, onScrollToSales }) =
           }}
         />
 
-        {/* Request new item (shopkeeper) */}
-        <ShopSidebarLink
-          to="/shopkeepers/request-item"
-          icon={DollarSign}
-          label="Request Item"
-          emoji="✉️"
-        />
 
-        {/* Assistant quick-open (fires event to open assistant tab) */}
-        <ShopSidebarLink
-          to="/shopkeepers"
-          icon={Package}
-          label="Assistant"
-          emoji="🤖"
-          onClick={() => {
-            try {
-              window.dispatchEvent(new CustomEvent('shop:openAssistant', { detail: { shopId } }));
-            } catch (e) {
-              console.error('openAssistant event error', e);
-            }
-          }}
-        />
 
-        {/* Keep access to profile */}
-        <ShopSidebarLink
-          to="/profile"
-          icon={User}
-          label="Profile"
-          emoji="👤"
-        />
+        {/* (Dashboard, Request Item, Assistant, and Profile links removed by request) */}
       </nav>
 
       {/* Footer */}

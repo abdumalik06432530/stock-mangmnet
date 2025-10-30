@@ -4,7 +4,6 @@ import OrderManagement from './OrderManagement';
 import StockControl from './StockControl';
 import SalesManagement from './SalesManagement';
 import DashboardOverview from './DashboardOverview';
-import ShopkeeperAssistant from './ShopkeeperAssistant';
 
 const ShopkeeperDashboard = ({ token, shopId }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -16,7 +15,6 @@ const ShopkeeperDashboard = ({ token, shopId }) => {
     { id: 'orders', name: 'Orders', icon: Package },
     { id: 'stock', name: 'Stock Control', icon: Store },
     { id: 'sales', name: 'Sales', icon: ShoppingCart },
-  { id: 'assistant', name: 'Assistant', icon: BarChart3 },
     { id: 'customers', name: 'Customers', icon: Users },
   ];
 
@@ -41,18 +39,7 @@ const ShopkeeperDashboard = ({ token, shopId }) => {
     }
   }, [shopId]);
 
-  // Listen for global events (open assistant tab)
-  useEffect(() => {
-    const openAssistant = () => {
-      try {
-        setActiveTab('assistant');
-      } catch (err) {
-        console.error('openAssistant handler error', err);
-      }
-    };
-    window.addEventListener('shop:openAssistant', openAssistant);
-    return () => window.removeEventListener('shop:openAssistant', openAssistant);
-  }, []);
+  // (assistant functionality removed)
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -64,8 +51,7 @@ const ShopkeeperDashboard = ({ token, shopId }) => {
         return <StockControl token={token} shopId={shopId} />;
       case 'sales':
         return <SalesManagement token={token} shopId={shopId} />;
-      case 'assistant':
-        return <ShopkeeperAssistant shopId={shopId} />;
+      /* assistant tab removed */
       default:
         return <DashboardOverview token={token} shopId={shopId} />;
     }

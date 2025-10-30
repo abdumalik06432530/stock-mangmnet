@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Package, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import { backendUrl } from '../../config'; // Adjust path to your config
-import shopkeeperSim from '../../utils/shopkeeperSim'; // Mock simulator
-import sanitizeMessage from '../../utils/sanitizeMessage'; // Utility for sanitizing messages
+import { backendUrl } from '../../config';
+import shopkeeperSim from '../../utils/shopkeeperSim';
+import sanitizeMessage from '../../utils/sanitizeMessage';
 
-const OrderManagement = ({ token, shopId }) => {
+const OrderManagement = ({ token = null, shopId = '' }) => {
   if (!token) {
     toast.error('You are not authorized to access this page. Please log in.');
     return null;
@@ -18,7 +18,6 @@ const OrderManagement = ({ token, shopId }) => {
   const [quantity, setQuantity] = useState(1);
   const [category, setCategory] = useState('');
   const [subCategory, setSubCategory] = useState('');
-  const [accessoryQuantities, setAccessoryQuantities] = useState({});
   const [type, setType] = useState('');
   const [isCustomCategory, setIsCustomCategory] = useState(false);
 
@@ -28,20 +27,8 @@ const OrderManagement = ({ token, shopId }) => {
   const [isFetching, setIsFetching] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // Predefined categories for non-custom selection
+  // Predefined categories
   const predefinedCategories = ['Chair', 'Table', 'Shelf', 'Others'];
-
-  // Accessory options for chairs
-  const accessoryOptions = [
-    'Arm',
-    'Mechanism',
-    'Headrest',
-    'Castor',
-    'Chrome',
-    'Gas Lift',
-    'Cup Holder',
-    'Chair Back',
-  ];
 
   // Fetch products and orders on mount
   useEffect(() => {
@@ -77,7 +64,6 @@ const OrderManagement = ({ token, shopId }) => {
         });
         setOrders(response.data.orders || []);
       } else {
-        // fallback to general orders endpoint when shopId is not available
         response = await axios.get(`${backendUrl}/api/orders`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -101,24 +87,19 @@ const OrderManagement = ({ token, shopId }) => {
       if (product) {
         setCategory(product.category);
         setSubCategory(product.subCategory);
-        setAccessoryQuantities(product.accessoryQuantities || {});
         setType(product.type || '');
         setIsCustomCategory(product.category === 'Others');
       }
     } else {
       setCategory('');
       setSubCategory('');
-      setAccessoryQuantities({});
       setType('');
       setIsCustomCategory(false);
     }
   }, [selectedProductId, products]);
 
-  // Reset accessories and type when category changes
+  // Reset type when category changes
   useEffect(() => {
-    if (category !== 'Chair') {
-      setAccessoryQuantities({});
-    }
     if (category === 'Chair') {
       setType('');
     }
@@ -126,13 +107,6 @@ const OrderManagement = ({ token, shopId }) => {
       setIsCustomCategory(false);
     }
   }, [category]);
-
-  const handleAccessoryChange = (acc, value) => {
-    setAccessoryQuantities((prev) => ({
-      ...prev,
-      [acc]: value ? parseInt(value, 10) : '',
-    }));
-  };
 
   const submitOrder = async (e) => {
     e.preventDefault();
@@ -159,20 +133,24 @@ const OrderManagement = ({ token, shopId }) => {
         furnitureType: isCustomCategory ? subCategory : product?.subCategory || subCategory,
         category: isCustomCategory ? category : product?.category || category,
         quantity: parseInt(quantity, 10),
-        accessories: category === 'Chair' ? accessoryQuantities : undefined,
         type: category !== 'Chair' && !isCustomCategory ? type : undefined,
       };
 
-      // Map UI item to server Order shape
       const orderToSend = {
         shop: shopId || undefined,
         furnitureType: item.furnitureType,
         type: item.type || item.category,
-        backModel: item.category === 'Chair' ? (product?.subCategory || item.name) : undefined,
-        headrest: Boolean((item.accessories && (item.accessories.Headrest || item.accessories.headrest)) || false),
         quantity: item.quantity,
         status: 'Pending',
-        shopkeeper: (() => { try { const u = localStorage.getItem('user'); const user = u ? JSON.parse(u) : null; return (user && (user.username || user._id)) || ''; } catch { return ''; } })(),
+        shopkeeper: (() => {
+          try {
+            const u = localStorage.getItem('user');
+            const user = u ? JSON.parse(u) : null;
+            return (user && (user.username || user._id)) || '';
+          } catch {
+            return '';
+          }
+        })(),
         createdAt: new Date().toISOString(),
       };
 
@@ -182,12 +160,10 @@ const OrderManagement = ({ token, shopId }) => {
 
       if (response.data.success) {
         toast.success('Order submitted successfully');
-        // Reset form
         setSelectedProductId('');
         setQuantity(1);
         setCategory('');
         setSubCategory('');
-        setAccessoryQuantities({});
         setType('');
         setIsCustomCategory(false);
         fetchOrders();
@@ -209,7 +185,6 @@ const OrderManagement = ({ token, shopId }) => {
                 furnitureType: isCustomCategory ? subCategory : subCategory,
                 category: isCustomCategory ? category : category,
                 quantity: parseInt(quantity, 10),
-                accessories: category === 'Chair' ? accessoryQuantities : undefined,
                 type: category !== 'Chair' && !isCustomCategory ? type : undefined,
               },
             ],
@@ -219,7 +194,6 @@ const OrderManagement = ({ token, shopId }) => {
           setQuantity(1);
           setCategory('');
           setSubCategory('');
-          setAccessoryQuantities({});
           setType('');
           setIsCustomCategory(false);
           setOrders((prev) => [simOrder, ...prev]);
@@ -263,17 +237,17 @@ const OrderManagement = ({ token, shopId }) => {
   const pendingOrders = orders.filter((order) => (order.status || '').toLowerCase() === 'pending');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-gray-50 to-purple-50 p-6 md:p-12">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-gray-50 to-purple-50 p-2 md:p-4 space-y-2">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+      <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-sm p-2">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-4xl font-extrabold text-gray-900">Order Management</h2>
-            <p className="text-gray-600">Record and track factory orders</p>
+            <h2 className="text-xl font-bold text-gray-900">Order Management</h2>
+            <p className="text-gray-600 text-[11px]">Record and track factory orders</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="bg-orange-50 px-4 py-2 rounded-lg">
-              <span className="text-orange-800 font-medium">
+          <div className="flex items-center space-x-2">
+            <div className="bg-gradient-to-r from-orange-50 to-orange-100 px-1.5 py-0.25 rounded-lg">
+              <span className="text-orange-800 font-medium text-[10px]">
                 {pendingOrders.length} Pending Orders
               </span>
             </div>
@@ -282,9 +256,9 @@ const OrderManagement = ({ token, shopId }) => {
       </div>
 
       {isFetching && (
-        <div className="text-center py-4">
+        <div className="text-center py-2">
           <svg
-            className="animate-spin h-8 w-8 text-indigo-600 mx-auto"
+            className="animate-spin h-4 w-4 text-indigo-600 mx-auto"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -292,32 +266,31 @@ const OrderManagement = ({ token, shopId }) => {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
           </svg>
-          <span className="text-gray-500">Loading data...</span>
+          <span className="text-gray-500 text-[10px]">Loading data...</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {/* Order Form */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-sm p-2">
           <form
             onSubmit={submitOrder}
-            className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-xl border border-gray-100 transition-all duration-300"
+            className="max-w-md mx-auto p-2 bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-sm border border-gray-100 transition-all duration-200"
           >
-            <h3 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-3">
-              <span className="text-indigo-600">➕</span> Create New Order
+            <h3 className="text-[11px] font-semibold text-gray-900 mb-1.5 flex items-center gap-1.5">
+              <Package className="h-3 w-3 text-indigo-600" /> Create New Order
             </h3>
-
-            <div className="space-y-6">
+            <div className="space-y-2">
               {/* Product Selection */}
               <div>
-                <label htmlFor="product" className="block mb-2 text-sm font-semibold text-gray-700">
+                <label htmlFor="product" className="block mb-0.5 text-[10px] font-medium text-gray-700">
                   Select Product
                 </label>
                 <select
                   id="product"
                   value={selectedProductId}
                   onChange={(e) => setSelectedProductId(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   aria-label="Select product"
                 >
                   <option value="">Select a product or custom item</option>
@@ -332,7 +305,7 @@ const OrderManagement = ({ token, shopId }) => {
 
               {/* Category */}
               <div>
-                <label htmlFor="category" className="block mb-2 text-sm font-semibold text-gray-700">
+                <label htmlFor="category" className="block mb-0.5 text-[10px] font-medium text-gray-700">
                   Category
                 </label>
                 {isCustomCategory ? (
@@ -343,7 +316,7 @@ const OrderManagement = ({ token, shopId }) => {
                     onChange={(e) => setCategory(e.target.value)}
                     placeholder="Enter custom category"
                     required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     aria-label="Custom category"
                   />
                 ) : (
@@ -356,7 +329,7 @@ const OrderManagement = ({ token, shopId }) => {
                     }}
                     required
                     disabled={selectedProductId && !isCustomCategory}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                     aria-label="Select category"
                   >
                     <option value="">Select Category</option>
@@ -371,7 +344,7 @@ const OrderManagement = ({ token, shopId }) => {
 
               {/* Subcategory */}
               <div>
-                <label htmlFor="subcategory" className="block mb-2 text-sm font-semibold text-gray-700">
+                <label htmlFor="subcategory" className="block mb-0.5 text-[10px] font-medium text-gray-700">
                   Subcategory
                 </label>
                 {isCustomCategory ? (
@@ -382,7 +355,7 @@ const OrderManagement = ({ token, shopId }) => {
                     onChange={(e) => setSubCategory(e.target.value)}
                     placeholder="Enter custom subcategory"
                     required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     aria-label="Custom subcategory"
                   />
                 ) : (
@@ -392,7 +365,7 @@ const OrderManagement = ({ token, shopId }) => {
                     onChange={(e) => setSubCategory(e.target.value)}
                     required
                     disabled={selectedProductId && !isCustomCategory}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                     aria-label="Select subcategory"
                   >
                     <option value="">Select Subcategory</option>
@@ -407,7 +380,7 @@ const OrderManagement = ({ token, shopId }) => {
 
               {/* Quantity */}
               <div>
-                <label htmlFor="quantity" className="block mb-2 text-sm font-semibold text-gray-700">
+                <label htmlFor="quantity" className="block mb-0.5 text-[10px] font-medium text-gray-700">
                   Quantity
                 </label>
                 <input
@@ -418,17 +391,15 @@ const OrderManagement = ({ token, shopId }) => {
                   placeholder="Enter quantity"
                   min="1"
                   required
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   aria-label="Order quantity"
                 />
               </div>
 
-              {/* Chair Accessories: removed per request — only overall quantity is required */}
-
               {/* Type for Non-Chair */}
               {category && category !== 'Chair' && !isCustomCategory && (
                 <div>
-                  <label htmlFor="type" className="block mb-2 text-sm font-semibold text-gray-700">
+                  <label htmlFor="type" className="block mb-0.5 text-[10px] font-medium text-gray-700">
                     Type
                   </label>
                   <input
@@ -439,7 +410,7 @@ const OrderManagement = ({ token, shopId }) => {
                     placeholder="Enter type"
                     required
                     disabled={selectedProductId && !isCustomCategory}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                    className="w-full px-2 py-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                     aria-label="Item type"
                   />
                 </div>
@@ -449,13 +420,13 @@ const OrderManagement = ({ token, shopId }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold px-2 py-1 rounded-lg hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Submit order"
               >
                 {loading ? (
                   <span className="flex items-center justify-center">
                     <svg
-                      className="animate-spin h-5 w-5 mr-2 text-white"
+                      className="animate-spin h-3 w-3 mr-1 text-white"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -463,11 +434,11 @@ const OrderManagement = ({ token, shopId }) => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
                     </svg>
-                    Submitting Order...
+                    Submitting...
                   </span>
                 ) : (
                   <>
-                    <span>➕</span> Submit Order
+                    <Package className="h-3 w-3" /> Submit Order
                   </>
                 )}
               </button>
@@ -476,21 +447,24 @@ const OrderManagement = ({ token, shopId }) => {
         </div>
 
         {/* Recent Orders */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Orders</h3>
-          <div className="space-y-3">
-            {orders.length === 0 && <p className="text-center text-gray-500">No recent orders</p>}
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-sm p-2">
+          <h3 className="text-[11px] font-semibold text-gray-900 mb-1.5">Recent Orders</h3>
+          <div className="space-y-1">
+            {orders.length === 0 && <p className="text-center text-gray-500 text-[10px]">No recent orders</p>}
             {orders.slice(0, 5).map((order) => (
-              <div key={order._id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+              <div
+                key={order._id}
+                className="flex items-center justify-between p-1.5 border border-gray-200 rounded-lg hover:bg-gradient-to-r from-gray-50 to-gray-100 transition-all duration-200"
+              >
                 <div>
-                  <p className="font-medium text-gray-900">Order #{order._id.slice(-6)}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="font-medium text-gray-900 text-[10px]">Order #{order._id.slice(-6)}</p>
+                  <p className="text-[10px] text-gray-500">
                     {new Date(order.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1">
                   <span
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    className={`px-1.5 py-0.25 rounded-full text-[10px] font-medium ${
                       order.status === 'Delivered'
                         ? 'bg-green-100 text-green-800'
                         : order.status === 'Processing'
@@ -504,7 +478,7 @@ const OrderManagement = ({ token, shopId }) => {
                   </span>
                   <button
                     onClick={() => setSelectedOrder(order)}
-                    className="text-indigo-600 hover:text-indigo-700 text-sm"
+                    className="text-indigo-600 hover:text-indigo-700 text-[10px]"
                     aria-label={`View details for order ${order._id}`}
                   >
                     Details
@@ -513,7 +487,7 @@ const OrderManagement = ({ token, shopId }) => {
                     <button
                       onClick={() => cancelOrder(order._id)}
                       disabled={loading}
-                      className="text-red-600 hover:text-red-700 text-sm disabled:opacity-50"
+                      className="text-red-600 hover:text-red-700 text-[10px] disabled:opacity-50"
                       aria-label={`Cancel order ${order._id}`}
                     >
                       Cancel
@@ -529,53 +503,44 @@ const OrderManagement = ({ token, shopId }) => {
       {/* Order Details Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Order #{selectedOrder._id.slice(-6)}</h3>
+          <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-2 max-w-xs w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-[11px] font-semibold text-gray-900">
+                Order #{selectedOrder._id.slice(-6)}
+              </h3>
               <button
                 onClick={() => setSelectedOrder(null)}
                 className="text-gray-500 hover:text-gray-700"
                 aria-label="Close order details"
               >
-                <X className="h-5 w-5" />
+                <X className="h-3 w-3" />
               </button>
             </div>
-            <p>
+            <p className="text-[10px]">
               <strong>Status:</strong> {selectedOrder.status}
             </p>
-            <p>
+            <p className="text-[10px]">
               <strong>Date:</strong> {new Date(selectedOrder.createdAt).toLocaleDateString()}
             </p>
-            <p>
+            <p className="text-[10px]">
               <strong>Items:</strong>
             </p>
-            <ul className="list-disc pl-5">
+            <ul className="list-disc pl-4 text-[10px]">
               {selectedOrder.items.map((item, index) => (
                 <li key={index}>
                   {item.name} ({item.furnitureType}, Qty: {item.quantity})
-                  {item.accessories && (
-                    <ul className="list-circle pl-5">
-                      {Object.entries(item.accessories).map(([acc, qty]) =>
-                        qty > 0 ? (
-                          <li key={acc}>
-                            {acc}: {qty}
-                          </li>
-                        ) : null
-                      )}
-                    </ul>
-                  )}
                   {item.type && <span>, Type: {item.type}</span>}
                 </li>
               ))}
             </ul>
             {selectedOrder.status === 'Rejected' && selectedOrder.rejectionReason && (
-              <p>
-                <strong>Rejection Reason:</strong> {selectedOrder.rejectionReason}
+              <p className="text-[10px]">
+                <strong>Reason:</strong> {selectedOrder.rejectionReason}
               </p>
             )}
             <button
               onClick={() => setSelectedOrder(null)}
-              className="mt-4 w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              className="mt-1.5 w-full px-1.5 py-0.25 bg-indigo-600 text-white text-[10px] rounded-lg hover:bg-indigo-700 hover:shadow-md transition-all duration-200"
               aria-label="Close order details"
             >
               Close
