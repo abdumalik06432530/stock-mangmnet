@@ -43,13 +43,12 @@ const List = ({ token }) => {
     }
   }, [token]);
 
-  // Remove product
+  // Remove product (DELETE)
   const removeProduct = useCallback(
     async (id) => {
       try {
-        const response = await axios.post(
-          `${backendUrl}/api/product/remove`,
-          { id },
+        const response = await axios.delete(
+          `${backendUrl}/api/product/${id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (response.data.success) {
@@ -197,12 +196,11 @@ const List = ({ token }) => {
       ) : (
         <div className="flex flex-col gap-4">
           {/* Table Header */}
-          <div className="hidden md:grid grid-cols-[80px_2fr_1fr_1fr_1fr_120px] items-center py-3 px-4 bg-indigo-100 rounded-xl text-sm font-semibold text-gray-800 shadow-md">
-            <span>Image</span>
-            <span>Name</span>
+          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_2fr_120px] items-center py-3 px-4 bg-indigo-100 rounded-xl text-sm font-semibold text-gray-800 shadow-md">
+            <span>Model</span>
             <span>Category</span>
             <span>Subcategory</span>
-            <span>Details</span>
+            <span>Accessories</span>
             <span className="text-center">Action</span>
           </div>
 
@@ -210,185 +208,83 @@ const List = ({ token }) => {
           {filteredList.map((item, index) => (
             <div
               key={item._id}
-              className="grid grid-cols-1 sm:grid-cols-[80px_2fr_1fr_1fr_1fr_120px] items-center gap-4 py-3 px-4 border border-gray-200 rounded-xl bg-white shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+              className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_2fr_120px] items-center gap-4 py-3 px-4 border border-gray-200 rounded-xl bg-white shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+              onClick={() => window.location.href = `/admin/accessories/${item._id}`}
             >
-              <div className="flex items-center sm:block">
-                <div className="relative">
-                  <img
-                    className="w-16 h-16 object-cover rounded-lg border border-gray-200 shadow-sm transform hover:scale-105 transition-transform duration-200"
-                    src={
-                      item.image && item.image[0]
-                        ? item.image[0]
-                        : "https://via.placeholder.com/64?text=No+Image"
-                    }
-                    alt={item.name}
-                    aria-label={`Image of ${item.name}`}
-                  />
-                  <div className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                    {index + 1}
-                  </div>
-                </div>
-                <div className="sm:hidden ml-3">
-                  <p className="text-base font-semibold text-gray-900 truncate">
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-gray-600 capitalize">
-                    {item.category} / {item.subCategory}
-                  </p>
-                  {item.lastEditedBy && item.lastEditedAt && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Edited by {item.lastEditedBy.name} •{" "}
-                      {new Date(item.lastEditedAt).toLocaleString()}
-                      {typeof item.lastQuantityDelta === "number" && (
-                        <span
-                          className={`ml-2 font-semibold ${
-                            item.lastQuantityDelta > 0
-                              ? "text-green-600"
-                              : item.lastQuantityDelta < 0
-                              ? "text-red-600"
-                              : "text-gray-600"
-                          }`}
-                        >
-                          {item.lastQuantityDelta > 0
-                            ? `+${item.lastQuantityDelta}`
-                            : item.lastQuantityDelta}
-                        </span>
-                      )}
-                    </p>
-                  )}
-                </div>
+              {/* Model */}
+              <div className="font-semibold text-gray-900 truncate hover:text-indigo-600 transition-colors duration-200">
+                {item.model || item.name || `Model ${index + 1}`}
               </div>
-              <div className="hidden sm:block">
-                <p className="text-base font-semibold text-gray-900 truncate hover:text-indigo-600 transition-colors duration-200">
-                  {item.name}
-                </p>
-                {item.lastEditedBy && item.lastEditedAt && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Edited by {item.lastEditedBy.name} •{" "}
-                    {new Date(item.lastEditedAt).toLocaleString()}
-                    {typeof item.lastQuantityDelta === "number" && (
-                      <span
-                        className={`ml-2 font-semibold ${
-                          item.lastQuantityDelta > 0
-                            ? "text-green-600"
-                            : item.lastQuantityDelta < 0
-                            ? "text-red-600"
-                            : "text-gray-600"
-                        }`}
-                      >
-                        {item.lastQuantityDelta > 0
-                          ? `+${item.lastQuantityDelta}`
-                          : item.lastQuantityDelta}
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
-              <p className="hidden sm:block text-sm text-gray-600 capitalize">
+              {/* Category */}
+              <div className="text-sm text-gray-600 capitalize">
                 {item.category}
-              </p>
-              <p className="hidden sm:block text-sm text-gray-600 capitalize">
+              </div>
+              {/* Subcategory */}
+              <div className="text-sm text-gray-600 capitalize">
                 {item.subCategory}
-              </p>
-              <div className="hidden sm:block">
-                {item.category === "Chair" ? (
-                  <div>
-                    <button
-                      onClick={() => toggleRow(item._id)}
-                      className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center gap-1"
-                      aria-expanded={expandedRows[item._id]}
-                      aria-controls={`accessories-${item._id}`}
-                    >
-                      {expandedRows[item._id] ? "Hide Accessories" : "Show Accessories"}
-                      <span>{expandedRows[item._id] ? "▲" : "▼"}</span>
-                    </button>
-                    {expandedRows[item._id] && (
-                      <div id={`accessories-${item._id}`}>
-                        <AccessoryDetails item={item} isExpanded={expandedRows[item._id]} />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-600">{item.type || "N/A"}</p>
-                )}
               </div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                {editingId === item._id ? (
-                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <input
-                      type="number"
-                      min="0"
-                      value={editingQuantity}
-                      onChange={(e) => setEditingQuantity(e.target.value)}
-                      className="w-20 px-2 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      aria-label={`Edit quantity for ${item.name}`}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveQuantity(item._id)}
-                        className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors duration-200"
-                        aria-label={`Save quantity for ${item.name}`}
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="px-3 py-1 bg-gray-200 rounded-lg text-sm hover:bg-gray-300 transition-colors duration-200"
-                        aria-label="Cancel edit"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+              {/* Accessories Table */}
+              <div>
+                {item.accessoryQuantities && Object.keys(item.accessoryQuantities).length > 0 ? (
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-500">
+                        <th className="px-2 py-1">Accessory</th>
+                        <th className="px-2 py-1">Quantity</th>
+                        <th className="px-2 py-1">Edit</th>
+                        <th className="px-2 py-1">Delete</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(item.accessoryQuantities).map(([acc, qty]) => (
+                        <tr key={acc}>
+                          <td className="px-2 py-1">{acc}</td>
+                          <td className="px-2 py-1">{qty || "0"}</td>
+                          <td className="px-2 py-1">
+                            <button className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edit</button>
+                          </td>
+                          <td className="px-2 py-1">
+                            <button className="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 ) : (
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
-                    <p className="text-sm text-gray-700 font-medium">
-                      {item.quantity ?? (
-                        <span className="text-red-500">Out of Stock</span>
-                      )}
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => startEdit(item._id, item.quantity)}
-                        className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors duration-200"
-                        aria-label={`Edit quantity for ${item.name}`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => removeProduct(item._id)}
-                        className="px-3 py-1 text-red-500 hover:text-red-700 text-lg font-bold rounded-lg hover:bg-red-50 transition-all duration-200"
-                        title="Remove Product"
-                        aria-label={`Remove ${item.name}`}
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
+                  <p className="text-gray-500">No accessories</p>
                 )}
+                <button className="mt-2 px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs font-medium hover:bg-indigo-200">Add Accessory</button>
               </div>
-              {/* Mobile view for details */}
-              <div className="sm:hidden mt-2">
-                {item.category === "Chair" ? (
-                  <div>
-                    <button
-                      onClick={() => toggleRow(item._id)}
-                      className="text-indigo-600 hover:text-indigo-800 text-xs font-medium flex items-center gap-1"
-                      aria-expanded={expandedRows[item._id]}
-                      aria-controls={`accessories-mobile-${item._id}`}
-                    >
-                      {expandedRows[item._id] ? "Hide Accessories" : "Show Accessories"}
-                      <span>{expandedRows[item._id] ? "▲" : "▼"}</span>
-                    </button>
-                    {expandedRows[item._id] && (
-                      <div id={`accessories-mobile-${item._id}`}>
-                        <AccessoryDetails item={item} isExpanded={expandedRows[item._id]} />
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-600">Type: {item.type || "N/A"}</p>
-                )}
+              {/* Actions */}
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={e => { e.stopPropagation(); removeProduct(item._id); }}
+                  className="px-3 py-1 text-red-500 hover:text-red-700 text-sm font-bold rounded-lg hover:bg-red-50 transition-all duration-200"
+                  title="Remove Product"
+                  aria-label={`Remove ${item.model || item.name}`}
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={e => {
+                    e.stopPropagation();
+                    const newModel = prompt('Enter new model name:', item.model || item.name);
+                    if (newModel && newModel !== (item.model || item.name)) {
+                      axios.put(`${backendUrl}/api/product/${item._id}`, { model: newModel }, { headers: { Authorization: `Bearer ${token}` } })
+                        .then(res => {
+                          toast.success('Product updated');
+                          fetchList();
+                        })
+                        .catch(err => {
+                          toast.error('Failed to update product');
+                        });
+                    }
+                  }}
+                  className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 transition-colors duration-200"
+                  aria-label={`Edit ${item.model || item.name}`}
+                >
+                  Edit
+                </button>
               </div>
             </div>
           ))}

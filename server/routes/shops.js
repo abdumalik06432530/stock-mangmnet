@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Shop = require('../models/Shop');
+const Order = require('../models/Order');
 
 // GET /api/shops
 router.get('/', async (req, res) => {
@@ -28,3 +29,15 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /api/shops/:shopId/orders - list orders for a given shop
+router.get('/:shopId/orders', async (req, res) => {
+  try {
+    const { shopId } = req.params;
+    const orders = await Order.find({ shop: shopId }).sort({ _id: -1 }).lean();
+    return res.json({ success: true, orders });
+  } catch (err) {
+    console.error('shop orders error', err);
+    res.status(500).json({ success: false, message: 'server_error' });
+  }
+});

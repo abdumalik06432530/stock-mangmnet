@@ -1,21 +1,28 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { NavLink } from 'react-router-dom';
-import { FaHome, FaBoxOpen, FaCog, FaSignOutAlt } from 'react-icons/fa';
+import { Home, Package, Settings, LogOut } from 'lucide-react';
 
 const FactorySidebar = ({ orders }) => {
-  // Calculate order summary (orders may be undefined if not passed)
+  // Calculate order summary (handle case where orders may be undefined)
   const olist = Array.isArray(orders) ? orders : [];
   const pendingOrders = olist.filter(o => o.status === 'Pending' || !o.status).length;
   const processingOrders = olist.filter(o => o.status === 'Processing').length;
 
   return (
-    <div className="w-64 bg-white shadow-lg h-screen p-6 flex flex-col justify-between">
+    <div className="w-64 bg-white shadow-sm h-screen p-6 flex flex-col justify-between border-r border-gray-200">
       <div>
         {/* Logo/Title */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-indigo-600">Factory Dashboard</h2>
-          <p className="text-sm text-gray-500">Manage your operations</p>
+          <div className="flex items-center space-x-3">
+            <div className="bg-blue-100 p-2 rounded-xl">
+              <Package className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Factory Dashboard</h2>
+              <p className="text-sm text-gray-500">Manage your operations</p>
+            </div>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -23,53 +30,53 @@ const FactorySidebar = ({ orders }) => {
           <NavLink
             to="/factory"
             className={({ isActive }) =>
-              `flex items-center space-x-2 p-2 rounded-lg transition-colors ${
-                isActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-600 hover:bg-gray-100'
+              `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
               }`
             }
           >
-            <FaHome className="text-lg" />
-            <span>Dashboard</span>
+            <Home className="h-5 w-5" />
+            <span className="font-medium">Dashboard</span>
           </NavLink>
           <NavLink
             to="/orders"
             className={({ isActive }) =>
-              `flex items-center space-x-2 p-2 rounded-lg transition-colors ${
-                isActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-600 hover:bg-gray-100'
+              `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
               }`
             }
           >
-            <FaBoxOpen className="text-lg" />
-            <span>Orders</span>
+            <Package className="h-5 w-5" />
+            <span className="font-medium">Orders</span>
           </NavLink>
           <NavLink
             to="/settings"
             className={({ isActive }) =>
-              `flex items-center space-x-2 p-2 rounded-lg transition-colors ${
-                isActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-600 hover:bg-gray-100'
+              `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
               }`
             }
           >
-            <FaCog className="text-lg" />
-            <span>Settings</span>
+            <Settings className="h-5 w-5" />
+            <span className="font-medium">Settings</span>
           </NavLink>
         </nav>
 
         {/* Order Summary */}
         <div className="mt-8">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Order Summary</h3>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Order Summary</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-sm">
               <span className="text-gray-600">Pending Orders</span>
-              <span className="font-medium text-indigo-600">{pendingOrders}</span>
+              <span className="font-medium text-orange-600">{pendingOrders}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between items-center text-sm">
               <span className="text-gray-600">Processing Orders</span>
-              <span className="font-medium text-green-600">{processingOrders}</span>
+              <span className="font-medium text-blue-600">{processingOrders}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between items-center text-sm">
               <span className="text-gray-600">Total Orders</span>
-              <span className="font-medium text-gray-800">{orders.length}</span>
+              <span className="font-medium text-gray-900">{olist.length}</span>
             </div>
           </div>
         </div>
@@ -78,17 +85,15 @@ const FactorySidebar = ({ orders }) => {
       {/* Logout Button */}
       <div>
         <button
-          className="w-full flex items-center space-x-2 p-2 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors"
+          className="w-full flex items-center space-x-3 p-3 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
         >
-          <FaSignOutAlt className="text-lg" />
-          <span>Logout</span>
+          <LogOut className="h-5 w-5" />
+          <span className="font-medium">Logout</span>
         </button>
       </div>
     </div>
   );
 };
-
-export default FactorySidebar;
 
 FactorySidebar.propTypes = {
   orders: PropTypes.array,
@@ -97,3 +102,5 @@ FactorySidebar.propTypes = {
 FactorySidebar.defaultProps = {
   orders: [],
 };
+
+export default FactorySidebar;

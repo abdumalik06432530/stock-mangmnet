@@ -640,13 +640,28 @@ const StockTab = ({ stock, loading, addStock, fetchStock }) => {
 
 // Production Overview Tab
 const ProductionTab = ({ orders, stock }) => {
+  const componentRequirements = {
+    'chair_with_headrest': {
+      back: 1, seat: 1, arms: 2, mechanism: 1, gaslift: 1, castor: 5, headrest: 1
+    },
+    'chair_no_headrest': {
+      back: 1, seat: 1, arms: 2, mechanism: 1, gaslift: 1, castor: 5, headrest: 0
+    }
+  };
+
+  let componentsUsed = 0;
+  orders.filter(o => o.status === 'Delivered').forEach(order => {
+    const req = componentRequirements[order.chairType] || componentRequirements['chair_no_headrest'];
+    componentsUsed += Object.values(req).reduce((sum, v) => sum + v, 0) * order.quantity;
+  });
+
   const productionStats = {
     chairsInProduction: orders.filter(o => o.status === 'Processing').reduce((sum, o) => sum + o.quantity, 0),
     chairsDeliveredThisMonth: orders.filter(o => 
       o.status === 'Delivered' && 
       new Date(o.updatedAt).getMonth() === new Date().getMonth()
     ).reduce((sum, o) => sum + o.quantity, 0),
-    componentsUsed: stock.reduce((sum, item) => sum + (item.initialQuantity - item.quantity), 0)
+    componentsUsed
   };
 
   return (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Package, ShoppingCart, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
+import shopkeeperSim from '../../utils/shopkeeperSim';
 
 const DashboardOverview = ({ token, shopId }) => {
   const [stats, setStats] = useState({});
@@ -12,21 +13,25 @@ const DashboardOverview = ({ token, shopId }) => {
 
   const fetchDashboardData = async () => {
     try {
-      // Simulated dashboard data
-      setStats({
-        totalOrders: 24,
-        pendingOrders: 3,
-        totalSales: 12500,
-        lowStockItems: 2,
-        customerCount: 89
-      });
-
-      setRecentActivity([
-        { type: 'sale', description: 'Sold 2 Chair Type A', time: '2 hours ago', amount: 400 },
-        { type: 'order', description: 'New order placed', time: '4 hours ago', items: 5 },
-        { type: 'delivery', description: 'Delivery received', time: '1 day ago', items: 10 },
-        { type: 'sale', description: 'Sold 1 Table Type A', time: '1 day ago', amount: 250 },
-      ]);
+      // Try backend, otherwise use simulator
+      try {
+        // attempt backend (if exists) - placeholder
+        // const response = await axios.get(`/api/shops/${shopId}/dashboard`);
+        // setStats(response.data.stats);
+        // setRecentActivity(response.data.recentActivity);
+        // For now, fall through to simulator
+        throw new Error('force-sim');
+      } catch (e) {
+        const summary = shopkeeperSim.getSummary(shopId);
+        setStats({
+          totalOrders: summary.totalOrders,
+          pendingOrders: summary.pendingOrders,
+          totalSales: summary.totalSales,
+          lowStockItems: summary.lowStockItems,
+          customerCount: summary.customerCount
+        });
+        setRecentActivity(summary.recentActivity || []);
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data');
     }

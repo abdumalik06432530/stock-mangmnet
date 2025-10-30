@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { Package, Store, ShoppingCart, DollarSign, Truck, User } from 'lucide-react';
+import { Package, Store, ShoppingCart, DollarSign, User } from 'lucide-react';
 
-const ShopSidebar = ({ shopId, onFetchItems, onFetchStock, onSubmitOrder, onFetchOrders, onScrollToSales }) => {
+const ShopSidebar = ({ shopId, onFetchStock, onFetchOrders, onScrollToSales }) => {
   return (
     <div className="fixed bottom-0 w-full sm:static sm:w-16 md:w-64 min-h-[60px] sm:min-h-screen bg-indigo-800 text-white shadow-lg sm:shadow-2xl flex flex-row sm:flex-col border-t sm:border-t-0 sm:border-r border-indigo-900 z-50">
       {/* Header */}
@@ -12,41 +12,82 @@ const ShopSidebar = ({ shopId, onFetchItems, onFetchStock, onSubmitOrder, onFetc
 
       {/* Navigation */}
       <nav className="flex flex-row sm:flex-col gap-2 sm:gap-3 sm:mt-4 px-2 sm:px-5 text-sm font-semibold overflow-x-auto sm:overflow-x-visible">
+        {/* Shopkeeper top-level dashboard (ShopkeeperDashboard.jsx) */}
         <ShopSidebarLink
-          to="/items"
+          to="/shopkeepers"
+          icon={User}
+          label="Shop Dashboard"
+          emoji="🏬"
+        />
+
+        {/* More detailed overview (DashboardOverview.jsx) */}
+        <ShopSidebarLink
+          to="/shopkeepers/dashboard"
           icon={Package}
-          label="Items"
-          emoji="📦"
-          onClick={onFetchItems}
+          label="Overview"
+          emoji="📊"
         />
+
+        {/* Orders management (OrderManagement.jsx) */}
         <ShopSidebarLink
-          to="/stock"
-          icon={Store}
-          label="Stock"
-          emoji="🏪"
-          onClick={onFetchStock}
-        />
-        <ShopSidebarLink
-          to="/orders"
+          to="/shopkeepers/orders"
           icon={ShoppingCart}
-          label="Order"
+          label="Order Management"
           emoji="🛒"
-          onClick={onSubmitOrder}
+          onClick={onFetchOrders}
         />
+
+        {/* Sales management (SalesManagement.jsx) */}
         <ShopSidebarLink
-          to="/sales"
+          to="/shopkeepers/sales"
           icon={DollarSign}
-          label="Sales"
+          label="Sales Management"
           emoji="💵"
           onClick={onScrollToSales}
         />
+
+        {/* Stock control (StockControl.jsx) */}
         <ShopSidebarLink
-          to="/pending-orders"
-          icon={Truck}
-          label="Pending Orders"
-          emoji="🚚"
-          onClick={onFetchOrders}
+          to="/shopkeepers/stock"
+          icon={Store}
+          label="Stock Control"
+          emoji="🏪"
+          onClick={() => {
+            try {
+              // call optional prop handler
+              onFetchStock && onFetchStock();
+              // dispatch a global event so the StockControl page (if mounted) can react immediately
+              window.dispatchEvent(new CustomEvent('shop:fetchStock', { detail: { shopId } }));
+            } catch (e) {
+              // noop
+            }
+          }}
         />
+
+        {/* Request new item (shopkeeper) */}
+        <ShopSidebarLink
+          to="/shopkeepers/request-item"
+          icon={DollarSign}
+          label="Request Item"
+          emoji="✉️"
+        />
+
+        {/* Assistant quick-open (fires event to open assistant tab) */}
+        <ShopSidebarLink
+          to="/shopkeepers"
+          icon={Package}
+          label="Assistant"
+          emoji="🤖"
+          onClick={() => {
+            try {
+              window.dispatchEvent(new CustomEvent('shop:openAssistant', { detail: { shopId } }));
+            } catch (e) {
+              console.error('openAssistant event error', e);
+            }
+          }}
+        />
+
+        {/* Keep access to profile */}
         <ShopSidebarLink
           to="/profile"
           icon={User}
@@ -65,18 +106,14 @@ const ShopSidebar = ({ shopId, onFetchItems, onFetchStock, onSubmitOrder, onFetc
 
 ShopSidebar.propTypes = {
   shopId: PropTypes.string,
-  onFetchItems: PropTypes.func,
   onFetchStock: PropTypes.func,
-  onSubmitOrder: PropTypes.func,
   onFetchOrders: PropTypes.func,
   onScrollToSales: PropTypes.func,
 };
 
 ShopSidebar.defaultProps = {
   shopId: '',
-  onFetchItems: () => {},
   onFetchStock: () => {},
-  onSubmitOrder: () => {},
   onFetchOrders: () => {},
   onScrollToSales: () => {},
 };

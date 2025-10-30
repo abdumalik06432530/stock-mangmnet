@@ -60,26 +60,18 @@ const Add = ({ token }) => {
     e.preventDefault();
 
     try {
-      const formData = new FormData();
-      formData.append("name", name);
-      formData.append("description", description);
-      formData.append("category", category);
-      formData.append("subCategory", subCategory);
+      const payload = {
+        name,
+        description,
+        category,
+        subCategory,
+        type: category === 'Chair' ? undefined : type,
+        accessoryQuantities: category === 'Chair' ? accessoryQuantities : undefined
+      };
 
-      if (category === "Chair") {
-        // ✅ Chair Back is now INSIDE accessoryQuantities
-        formData.append("accessoryQuantities", JSON.stringify(accessoryQuantities));
-      } else {
-        formData.append("type", type);
-      }
-
-      const response = await axios.post(
-        `${backendUrl}/api/product/add`,
-        formData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.post(`${backendUrl}/api/product/add`, payload, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
 
       if (response.data.success) {
         toast.success(response.data.message);

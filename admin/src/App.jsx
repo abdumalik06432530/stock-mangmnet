@@ -19,6 +19,9 @@ import FactoryManager from "./pages/factorymangers/FactoryManager";
 import Login from "./components/Login";
 import AdminRegister from "./components/AdminRegister";
 import Register from "./components/Register";
+import AccessoriesPage from "./pages/Admin/AccessoriesPage";
+import ItemRequests from "./pages/Admin/ItemRequests";
+import RequestItem from "./pages/Shoapkeprs/RequestItem";
 // import SuperAdminDashboard from "./pages/superAdmin/superadmin";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -82,15 +85,15 @@ const App = () => {
                 <Route path="/list" element={<List token={token} />} />
                 <Route path="/orders" element={<Orders token={token} />} />
                 <Route path="/profile" element={<AdminProfile token={token} />} />
-                <Route
-                  path="/dashboard"
-                  element={<Dashboard token={token} />}
-                />
+                <Route path="/dashboard" element={<Dashboard token={token} />} />
                 <Route path="/users" element={<Users token={token} />} />
+                <Route path="/admin/accessories/:productId" element={<AccessoriesPage />} />
+                <Route path="/admin/item-requests" element={<ItemRequests token={token} />} />
                 <Route path="/shopkeepers" element={<ShopkeeperDashboard token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/dashboard" element={<DashboardOverview token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/orders" element={<OrderManagement token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/stock" element={<StockControl token={token} shopId={shopId} />} />
+                <Route path="/shopkeepers/request-item" element={<RequestItem token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/sales" element={<SalesManagement token={token} shopId={shopId} />} />
                 <Route path="/factory" element={<FactoryManager token={token} />} />
               </Routes>
