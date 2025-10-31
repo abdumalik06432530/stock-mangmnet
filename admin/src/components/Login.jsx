@@ -29,13 +29,17 @@ const Login = ({ setToken }) => {
       if (token) {
         setToken(token);
         try { if (user) localStorage.setItem('user', JSON.stringify(user)); } catch(e) {}
+        // ensure token is stored immediately so parent App renders correct layout
+  try { localStorage.setItem('token', token); } catch (e) { console.warn('Failed to persist token locally', e); }
         toast.success('Logged in');
-        // redirect by role
-        const role = user?.role;
-        if (role === 'admin') navigate('/dashboard');
-        else if (role === 'shopkeeper') navigate('/shopkeepers');
-        else if (role === 'factory') navigate('/factory');
-        else navigate('/');
+        // redirect by role — send users to the appropriate "overview" page for their role
+        const role = (user?.role || '').toLowerCase();
+        let dest = '/';
+        if (role.includes('admin')) dest = '/dashboard';
+        else if (role.includes('shop')) dest = '/shopkeepers/dashboard';
+        else if (role.includes('factory')) dest = '/shops/dashboard';
+  // slight delay lets App pick up token and render correct layout before navigation
+  setTimeout(() => navigate(dest), 50);
       } else {
         toast.error(sanitizeMessage(response.data.message || 'Login failed'));
       }
@@ -107,7 +111,7 @@ const Login = ({ setToken }) => {
           </button>
         
           <div className="mt-4 text-center">
-            <p className="text-sm text-gray-600">Don't have an account?</p>
+            <p className="text-sm text-gray-600">Don&apos;t have an account?</p>
             <button
               type="button"
               onClick={() => navigate('/register')}

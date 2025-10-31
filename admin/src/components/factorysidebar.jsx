@@ -1,10 +1,15 @@
 // React import removed (JSX runtime assumed)
 import { NavLink } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, BarChart3, ShoppingCart, Package, Users } from 'lucide-react';
 
 const ShopkeepersSidebar = () => {
-  // Factory sidebar: navigation removed per request — shop/shopkeeper pages will use ShopSidebar instead
-  const menuItems = [];
+  // Factory sidebar: provide factory manager links
+  const menuItems = [
+    { to: '/shops/dashboard', name: 'Dashboard', icon: BarChart3 },
+    { to: '/shops/orders', name: 'Orders', icon: ShoppingCart },
+    { to: '/shops/stock-management', name: 'Stock Management', icon: Package },
+    { to: '/shops/drivers', name: 'Drivers', icon: Users },
+  ];
 
   return (
     <div className="w-48 bg-gradient-to-br from-white to-gray-50 shadow-sm h-screen p-4 flex flex-col justify-between border-r border-gray-200">
