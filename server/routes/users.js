@@ -3,6 +3,53 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Shop = require('../models/Shop');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'secret123';
+
+// GET /api/user/profile - return current user based on Bearer token
+router.get('/profile', async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ success: false, message: 'missing_token' });
+    let payload;
+    try { payload = jwt.verify(token, JWT_SECRET); } catch (e) { return res.status(401).json({ success: false, message: 'invalid_token' }); }
+    const user = await User.findById(payload.id).lean();
+    if (!user) return res.status(404).json({ success: false, message: 'not_found' });
+    const safe = { id: user._id, username: user.username, name: user.name, role: user.role, shops: user.shops || [], status: user.status };
+    return res.json({ success: true, user: safe });
+  } catch (err) {
+    console.error('profile error', err);
+    res.status(500).json({ success: false, message: 'server_error' });
+  }
+});
+
+// POST /api/user/profile/update - update current user's profile (username, name, password)
+router.post('/profile/update', async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ success: false, message: 'missing_token' });
+    let payload;
+    try { payload = jwt.verify(token, JWT_SECRET); } catch (e) { return res.status(401).json({ success: false, message: 'invalid_token' }); }
+    const user = await User.findById(payload.id);
+    if (!user) return res.status(404).json({ success: false, message: 'not_found' });
+
+    const { name, email, username, password } = req.body;
+    // support both email and username fields from frontend
+    if (email) user.username = email;
+    if (username) user.username = username;
+    if (name) user.name = name;
+    if (password) user.password = await bcrypt.hash(password, 10);
+
+    await user.save();
+    return res.json({ success: true, message: 'profile_updated' });
+  } catch (err) {
+    console.error('profile update error', err);
+    res.status(500).json({ success: false, message: 'server_error' });
+  }
+});
 
 // POST /api/user/create
 router.post('/create', async (req, res) => {

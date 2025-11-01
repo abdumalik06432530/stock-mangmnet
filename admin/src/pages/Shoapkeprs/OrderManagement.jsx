@@ -1,16 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+/* eslint-disable react-hooks/exhaustive-deps */
 import { Package, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { backendUrl } from '../../config';
-import shopkeeperSim from '../../utils/shopkeeperSim';
 import sanitizeMessage from '../../utils/sanitizeMessage';
 
 const OrderManagement = ({ token = null, shopId = '' }) => {
-  if (!token) {
-    toast.error('You are not authorized to access this page. Please log in.');
-    return null;
-  }
 
   // State for form
   const [products, setProducts] = useState([]);
@@ -27,10 +24,10 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
   const [isFetching, setIsFetching] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // Predefined categories
-  const predefinedCategories = ['Chair', 'Table', 'Shelf', 'Others'];
+  // Predefined categories (unused here; categories are derived from products)
 
   // Fetch products and orders on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchProducts();
     fetchOrders();
@@ -140,8 +137,9 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
         shop: shopId || undefined,
         furnitureType: item.furnitureType,
         type: item.type || item.category,
+        backModel: product ? (product.subCategory || product.model || product.name) : undefined,
         quantity: item.quantity,
-        status: 'Pending',
+        status: 'pending',
         shopkeeper: (() => {
           try {
             const u = localStorage.getItem('user');
@@ -170,41 +168,18 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
       } else {
         toast.error(sanitizeMessage(response.data.message));
       }
-    } catch (error) {
-      if (error.response?.status === 401) {
-        toast.error('Unauthorized: Please log in again');
-      } else if (error.response?.status === 400 && (error.response.data?.message || '').includes('stock')) {
-        toast.error('Order rejected by factory: Insufficient stock');
-      } else {
-        try {
-          const simOrder = shopkeeperSim.placeFactoryOrder(shopId, {
-            items: [
-              {
-                productId: selectedProductId || undefined,
-                name: products.find((p) => p._id === selectedProductId)?.name || 'Custom Item',
-                furnitureType: isCustomCategory ? subCategory : subCategory,
-                category: isCustomCategory ? category : category,
-                quantity: parseInt(quantity, 10),
-                type: category !== 'Chair' && !isCustomCategory ? type : undefined,
-              },
-            ],
-          });
-          toast.success(`Order submitted (sim): ${simOrder._id}`);
-          setSelectedProductId('');
-          setQuantity(1);
-          setCategory('');
-          setSubCategory('');
-          setType('');
-          setIsCustomCategory(false);
-          setOrders((prev) => [simOrder, ...prev]);
-        } catch (simErr) {
-          console.error(simErr);
-          toast.error(sanitizeMessage(simErr.message) || 'Failed to submit order');
+      } catch (error) {
+        if (error.response?.status === 401) {
+          toast.error('Unauthorized: Please log in again');
+        } else if (error.response?.status === 400 && (error.response.data?.message || '').includes('stock')) {
+          toast.error('Order rejected by factory: Insufficient stock');
+        } else {
+          console.error('Order submit error:', error.response?.data || error.message || error);
+          toast.error(sanitizeMessage(error.response?.data?.message) || 'Failed to submit order');
         }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
   };
 
   const cancelOrder = async (orderId) => {
@@ -235,6 +210,18 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
     : [];
 
   const pendingOrders = orders.filter((order) => (order.status || '').toLowerCase() === 'pending');
+
+  // If not authenticated, show a small message (hooks above still run)
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <h3 className="text-base font-bold text-gray-900">Unauthorized</h3>
+          <p className="text-xs text-gray-600 mt-2">Please log in to access Order Management.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-gray-50 to-purple-50 p-2 md:p-4 space-y-2">
@@ -550,6 +537,11 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
       )}
     </div>
   );
+};
+
+OrderManagement.propTypes = {
+  token: PropTypes.string,
+  shopId: PropTypes.string,
 };
 
 export default OrderManagement;

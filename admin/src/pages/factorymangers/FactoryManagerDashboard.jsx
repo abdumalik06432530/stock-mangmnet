@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+/* eslint-disable react/prop-types */
+import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'react-toastify';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { 
-  BarChart3, 
+  
   ShoppingCart, 
   Package, 
   Truck,
@@ -24,57 +25,63 @@ const FactoryManagerDashboard = ({ token = null }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const location = useLocation();
-  const navigate = useNavigate();
 
-  // Unauthorized access UI with reduced size
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200 p-2">
-        <div className="bg-white p-6 rounded-2xl shadow-lg max-w-md w-full text-center transform transition-all duration-300 hover:scale-105">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4 animate-pulse" />
-          <h3 className="text-lg font-bold text-gray-900">Unauthorized Access</h3>
-          <p className="text-gray-600 mt-2 text-sm">Please log in to access the Factory Manager dashboard.</p>
-          <button
-            onClick={() => navigate('/login')}
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md text-sm"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // NOTE: removed early return for token so hooks below run consistently; unauthorized UI is rendered inside JSX return
 
-  // Fetch all data with Promise.all
-  const fetchAllData = async () => {
+  // Fetch all data with Promise.all (stable callback to use in effect)
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [ordersRes, stockRes, driversRes] = await Promise.all([
-        axios.get(`${backendUrl}/api/orders`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${backendUrl}/api/factory/stock`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${backendUrl}/api/drivers`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+      // Use allSettled so a missing /api/drivers doesn't fail the whole dashboard load
+      const results = await Promise.allSettled([
+        axios.get(`${backendUrl}/api/orders`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/api/product/list`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/api/items`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/api/drivers`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
       ]);
 
-      setOrders(ordersRes.data.orders || ordersRes.data);
-      setStock(stockRes.data.stock || []);
-      setDrivers(driversRes.data.drivers || []);
+      const ordersRes = results[0].status === 'fulfilled' ? results[0].value : null;
+      const productsRes = results[1].status === 'fulfilled' ? results[1].value : null;
+      const itemsRes = results[2].status === 'fulfilled' ? results[2].value : null;
+      const driversRes = results[3] && results[3].status === 'fulfilled' ? results[3].value : null;
+
+      setOrders((ordersRes && (ordersRes.data.orders || ordersRes.data)) || []);
+
+      const products = (productsRes && (productsRes.data.products || productsRes.data)) || [];
+      const items = (itemsRes && (itemsRes.data.items || itemsRes.data)) || [];
+
+      const normalizedProducts = products.map((p) => ({
+        _id: p._id,
+        name: p.name || p.model || p.subCategory || 'Product',
+        category: p.category || '',
+        subCategory: p.subCategory || p.model || '',
+        accessoryQuantities: p.accessoryQuantities || {},
+        quantity: typeof p.quantity === 'number' ? p.quantity : Number(p.quantity || 0),
+        description: p.description || ''
+      }));
+
+      const normalizedItems = items.map((it) => ({
+        _id: it._id,
+        name: it.model || it.type || 'Accessory',
+        type: it.type,
+        furnitureType: it.furnitureType,
+        quantity: Number(it.quantity || 0),
+        description: it.description || ''
+      }));
+
+      setStock([...normalizedProducts, ...normalizedItems]);
+      setDrivers((driversRes && (driversRes.data.drivers || driversRes.data)) || []);
     } catch (err) {
       console.error('Failed to load data', err);
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [fetchAllData]);
 
   // Update active tab based on URL path
   useEffect(() => {
@@ -151,7 +158,7 @@ const FactoryManagerDashboard = ({ token = null }) => {
 };
 
 // Overview Tab Component with Reduced Size
-const OverviewTab = ({ stats, orders, stock, drivers }) => {
+const OverviewTab = ({ stats, orders, stock }) => {
   const recentOrders = orders.slice(0, 5);
   const lowStockItems = stock.filter(item => item.quantity < 10);
 

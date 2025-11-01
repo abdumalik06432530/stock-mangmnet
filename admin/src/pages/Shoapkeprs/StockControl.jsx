@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -7,10 +8,6 @@ import shopkeeperSim from '../../utils/shopkeeperSim';
 import sanitizeMessage from '../../utils/sanitizeMessage';
 
 const StockControl = ({ token, shopId }) => {
-  if (!token) {
-    toast.error('You are not authorized to access this page. Please log in.');
-    return null;
-  }
 
   // State for stock
   const [stock, setStock] = useState({});
@@ -36,11 +33,38 @@ const StockControl = ({ token, shopId }) => {
   const fetchStock = useCallback(async () => {
     setIsFetching(true);
     try {
-      const response = await axios.get(`${backendUrl}/api/shops/${shopId}/stock`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setStock(response.data.stock || {});
+      // Prefer fetching items (components, backs, etc.) and aggregate into a simple stock map
+      const [itemsRes, productsRes] = await Promise.all([
+        axios.get(`${backendUrl}/api/items`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/api/product/list`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const items = Array.isArray(itemsRes.data) ? itemsRes.data : (itemsRes.data.items || []);
+      const products = (productsRes.data && (productsRes.data.products || productsRes.data)) || [];
+
+      // build a simple stock map: label -> total quantity
+      const map = {};
+      const labelFor = (it) => {
+        if (!it) return 'unknown';
+        if (it.type === 'back' && it.model) return `${it.model} (back)`;
+        if (it.model) return `${it.model} (${it.type})`;
+        return `${it.type}`;
+      };
+
+      for (const it of items) {
+        const label = labelFor(it).replace(/\s+/g, '_').toLowerCase();
+        map[label] = (map[label] || 0) + (Number(it.quantity || 0));
+      }
+
+      // include finished products as separate entries (optional)
+      for (const p of products) {
+        const label = (p.model || p.name || 'product').toString().replace(/\s+/g, '_').toLowerCase();
+        map[label] = Math.max(map[label] || 0, Number(p.quantity || 0));
+      }
+
+      setStock(map);
     } catch (error) {
+      // fallback to local simulation if server endpoints are unreachable
       try {
         const sim = shopkeeperSim.getStock(shopId);
         setStock(sim || {});
@@ -81,21 +105,21 @@ const StockControl = ({ token, shopId }) => {
 
     setLoading(true);
     try {
+      // items/request API expects: { type, model, furnitureType, quantity, optional, requester }
       const payload = {
-        shopId,
-        name: newItem.name,
-        category: newItem.category,
-        subCategory: newItem.subCategory,
+        type: (newItem.type || newItem.name).toString().toLowerCase().replace(/\s+/g, '_'),
+        model: newItem.name,
+        furnitureType: (newItem.category || '').toString().toLowerCase(),
         quantity: parseInt(newItem.quantity, 10),
-        description: newItem.description,
-        type: newItem.category !== 'Chair' && !isCustomCategory ? newItem.type : undefined,
+        optional: false,
+        requester: shopId || undefined,
       };
 
-      const response = await axios.post(`${backendUrl}/api/stock/requests`, payload, {
+      const response = await axios.post(`${backendUrl}/api/items/request`, payload, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
 
-      if (response.data.success) {
+      if (response.data && response.data.success) {
         toast.success('New item request submitted for admin approval');
         setNewItem({
           name: '',
@@ -122,6 +146,13 @@ const StockControl = ({ token, shopId }) => {
     }
   };
 
+  const handleOrderClick = (label) => {
+    // prefill add form for ordering more of the given item
+    const name = label.replace(/_/g, ' ').replace(/\([^)]*\)/g, '').trim();
+    setNewItem((s) => ({ ...s, name, category: 'Chair', subCategory: '', quantity: '1' }));
+    setShowAddForm(true);
+  };
+
   const getStockLevelColor = (quantity) => {
     if (quantity === 0) return 'text-red-600 bg-red-50';
     if (quantity < 5) return 'text-orange-600 bg-amber-50';
@@ -137,6 +168,18 @@ const StockControl = ({ token, shopId }) => {
   };
 
   const lowStockItems = Object.entries(stock).filter(([, quantity]) => quantity < 5);
+
+  // If not authenticated, show Unauthorized message (hooks above still run)
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <h3 className="text-base font-bold text-gray-900">Unauthorized</h3>
+          <p className="text-xs text-gray-600 mt-2">Please log in to access Stock Control.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-gray-50 to-purple-50 p-2 md:p-4">
@@ -260,7 +303,7 @@ const StockControl = ({ token, shopId }) => {
                       </p>
                       <p className="text-[10px] text-red-700">Only {quantity} left in stock</p>
                     </div>
-                    <button className="px-1.5 py-0.25 bg-red-600 text-white text-[10px] rounded-lg hover:bg-red-700 transition-colors duration-200">
+                    <button onClick={() => handleOrderClick(item)} className="px-1.5 py-0.25 bg-red-600 text-white text-[10px] rounded-lg hover:bg-red-700 transition-colors duration-200">
                       Order
                     </button>
                   </div>
@@ -441,3 +484,8 @@ const StockControl = ({ token, shopId }) => {
 };
 
 export default StockControl;
+
+StockControl.propTypes = {
+  token: PropTypes.string,
+  shopId: PropTypes.string,
+};

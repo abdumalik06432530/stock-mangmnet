@@ -45,9 +45,6 @@ router.post('/', async (req, res) => {
     res.status(500).json({ success: false, message: 'server_error' });
   }
 });
-
-module.exports = router;
-
 // GET /api/shops/:shopId/orders - list orders for a given shop
 router.get('/:shopId/orders', async (req, res) => {
   try {
@@ -59,3 +56,5 @@ router.get('/:shopId/orders', async (req, res) => {
     res.status(500).json({ success: false, message: 'server_error' });
   }
 });
+
+module.exports = router;

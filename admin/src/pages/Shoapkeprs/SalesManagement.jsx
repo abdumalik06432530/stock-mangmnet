@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { AlertTriangle, User, MapPin, Phone, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -7,10 +8,6 @@ import shopkeeperSim from '../../utils/shopkeeperSim';
 import sanitizeMessage from '../../utils/sanitizeMessage';
 
 const SalesManagement = ({ token, shopId }) => {
-  if (!token) {
-    toast.error('You are not authorized to access this page. Please log in.');
-    return null;
-  }
 
   // State for form
   const [products, setProducts] = useState([]);
@@ -34,17 +31,16 @@ const SalesManagement = ({ token, shopId }) => {
   const [isFetching, setIsFetching] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
 
-  // Predefined categories
-  const predefinedCategories = ['Chair', 'Table', 'Shelf', 'Others'];
+  // Predefined categories (kept for future use)
 
   // Fetch products and sales history
   const fetchProducts = useCallback(async () => {
     setIsFetching(true);
     try {
-      const response = await axios.get(`${backendUrl}/api/products`, {
+      const response = await axios.get(`${backendUrl}/api/product/list`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setProducts(response.data.products || []);
+      setProducts(response.data.products || response.data || []);
     } catch (error) {
       toast.error(
         error.response?.status === 401
@@ -59,10 +55,45 @@ const SalesManagement = ({ token, shopId }) => {
   const fetchSalesHistory = useCallback(async () => {
     setIsFetching(true);
     try {
-      const response = await axios.get(`${backendUrl}/api/shops/${shopId}/sales`, {
+      const response = await axios.get(`${backendUrl}/api/shopkeeper/sales`, {
         headers: { Authorization: `Bearer ${token}` },
+        params: { shop: shopId },
       });
-      setSalesHistory(response.data.sales || []);
+      // Normalize sales so frontend can rely on sale.customer and sale.items
+      const raw = response.data.sales || [];
+      const normalized = (raw || []).map((sale) => {
+        const s = { ...sale };
+        // Ensure customer object exists. Backend sometimes returns customerName/phone/address instead.
+        if (!s.customer) {
+          const name = s.customerName || '';
+          const [firstName = '', ...rest] = (name || '').split(' ');
+          const lastName = rest.join(' ');
+          s.customer = {
+            firstName: firstName || '',
+            lastName: lastName || '',
+            phone: s.customerPhone || s.phone || '',
+            email: s.customerEmail || s.email || '',
+            address: s.customerAddress || s.address || '',
+          };
+        }
+
+        // Ensure items array exists for UI; create fallback from product/productModel/quantity
+        if (!Array.isArray(s.items) || s.items.length === 0) {
+          const itemName = s.productModel || (s.product && (s.product.name || s.productModel)) || 'Item';
+          s.items = [
+            {
+              name: itemName,
+              furnitureType: itemName,
+              quantity: s.quantity || 1,
+              type: s.type || '',
+            },
+          ];
+        }
+
+        return s;
+      });
+
+      setSalesHistory(normalized);
     } catch (error) {
       toast.error(
         error.response?.status === 401
@@ -129,25 +160,19 @@ const SalesManagement = ({ token, shopId }) => {
         ? products.find((p) => p._id === selectedProductId)
         : null;
 
-      const payload = {
-        shopId,
-        customer: customerDetails,
-        items: [
-          {
-            productId: selectedProductId || undefined,
-            name: product ? product.name : 'Custom Item',
-            description: product ? product.description : '',
-            furnitureType: isCustomCategory ? subCategory : product?.subCategory || subCategory,
-            category: isCustomCategory ? category : product?.category || category,
-            quantity: parseInt(quantity, 10),
-            type: category !== 'Chair' && !isCustomCategory ? type : undefined,
-          },
-        ],
-        status: 'Pending',
-        createdAt: new Date().toISOString(),
+      // Send to shopkeeper sales endpoint: { shop, productId|productModel, quantity, customerName, customerPhone, customerAddress }
+      const customerName = `${customerDetails.firstName || ''} ${customerDetails.lastName || ''}`.trim();
+      const salePayload = {
+        shop: shopId,
+        quantity: parseInt(quantity, 10),
+        customerName,
+        customerPhone: customerDetails.phone,
+        customerAddress: customerDetails.address,
       };
+      if (selectedProductId) salePayload.productId = selectedProductId;
+      else salePayload.productModel = product ? product.name : (customerDetails.itemName || 'Custom Item');
 
-      const response = await axios.post(`${backendUrl}/api/sales`, payload, {
+      const response = await axios.post(`${backendUrl}/api/shopkeeper/sales`, salePayload, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
 
@@ -171,7 +196,7 @@ const SalesManagement = ({ token, shopId }) => {
       } else {
         toast.error(sanitizeMessage(response.data.message));
       }
-    } catch (error) {
+      } catch (error) {
       if (error.response?.status === 401) {
         toast.error('Unauthorized: Please log in again');
       } else if (error.response?.status === 400 && error.response.data?.message.includes('stock')) {
@@ -220,7 +245,7 @@ const SalesManagement = ({ token, shopId }) => {
   const cancelSale = async (saleId) => {
     setLoading(true);
     try {
-      await axios.delete(`${backendUrl}/api/sales/${saleId}`, {
+      await axios.delete(`${backendUrl}/api/shopkeeper/sales/${saleId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success('Sale canceled successfully');
@@ -245,6 +270,18 @@ const SalesManagement = ({ token, shopId }) => {
     : [];
 
   const pendingSales = salesHistory.filter((sale) => (sale.status || '').toLowerCase() === 'pending');
+
+  // If not authenticated, show Unauthorized UI (hooks above still run)
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <h3 className="text-base font-bold text-gray-900">Unauthorized</h3>
+          <p className="text-xs text-gray-600 mt-2">Please log in to access Sales Management.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-gray-50 to-purple-50 p-2 md:p-4">
@@ -780,3 +817,8 @@ const SalesManagement = ({ token, shopId }) => {
 };
 
 export default SalesManagement;
+
+SalesManagement.propTypes = {
+  token: PropTypes.string,
+  shopId: PropTypes.string,
+};

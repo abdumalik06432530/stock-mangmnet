@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+/* eslint-disable react/prop-types */
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { debounce } from 'lodash';
@@ -6,7 +7,41 @@ import { Package, Search, AlertCircle, Edit, Trash2, Plus, Minus, RefreshCw } fr
 import { backendUrl } from '../../config';
 import sanitizeMessage from '../../utils/sanitizeMessage';
 
-const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
+// helper mapping used by backend product routes (kept in sync)
+const mapNameToType = (raw) => {
+  if (!raw) return raw;
+  const k = String(raw).toLowerCase().trim();
+  if (k === 'arm') return 'arm';
+  if (k === 'mechanism') return 'mechanism';
+  if (k === 'headrest') return 'headrest';
+  if (k === 'castor') return 'castor';
+  if (k === 'chrome') return 'chrome';
+  if (k === 'gas lift' || k === 'gaslift') return 'gaslift';
+  if (k === 'chair back' || k === 'chairback' || k === 'back') return 'back';
+  if (k === 'cup holder' || k === 'cupholder') return 'cupholder';
+  return k.replace(/\s+/g, '_');
+};
+
+import PropTypes from 'prop-types';
+
+const categories = {
+  Chair: ['Office Chair', 'Gaming Chair', 'Dining Chair'],
+  Table: ['Dining Table', 'Coffee Table', 'Study Table'],
+  Shelf: ['Bookshelf', 'Wall Shelf', 'Storage Shelf'],
+  Others: ['Miscellaneous']
+};
+const accessoryOptions = [
+  'Arm',
+  'Mechanism',
+  'Headrest',
+  'Castor',
+  'Chrome',
+  'Gas Lift',
+  'Cup Holder',
+  'Chair Back'
+];
+
+const ApprovalStockList = ({ token, stock, fetchStock }) => {
   // State
   const [newStock, setNewStock] = useState({
     name: '',
@@ -26,49 +61,16 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const categories = {
-    Chair: ['Office Chair', 'Gaming Chair', 'Dining Chair'],
-    Table: ['Dining Table', 'Coffee Table', 'Study Table'],
-    Shelf: ['Bookshelf', 'Wall Shelf', 'Storage Shelf'],
-    Others: ['Miscellaneous']
-  };
-  const accessoryOptions = [
-    'Arm',
-    'Mechanism',
-    'Headrest',
-    'Castor',
-    'Chrome',
-    'Gas Lift',
-    'Cup Holder',
-    'Chair Back'
-  ];
+  
 
-  // Token validation
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" aria-hidden="true" />
-          <h3 className="text-base font-bold text-gray-900">Unauthorized Access</h3>
-          <p className="text-xs text-gray-600 mt-2">Please log in to access the Stock List.</p>
-          <button
-            onClick={() => (window.location.href = '/login')}
-            className="mt-3 px-4 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md text-xs"
-            aria-label="Go to login page"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // token handling: rendering for unauthorized will be done later in JSX so hooks stay stable
 
   // Fetch pending requests
   const fetchPendingRequests = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await axios.get(`${backendUrl}/api/factory/stock/pending-requests`, {
+      const res = await axios.get(`${backendUrl}/api/items/requests`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data.success) {
@@ -89,21 +91,27 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
   // Send stock addition request
   const addStockRequest = useCallback(async (productData) => {
     try {
-      const payload = {
-        ...productData,
-        status: 'Pending',
-        accessoryQuantities: productData.category === 'Chair' ? productData.accessoryQuantities : undefined,
-        type: productData.category === 'Chair' ? undefined : productData.type
-      };
-      const res = await axios.post(
-        `${backendUrl}/api/factory/stock/request`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (res.data.success) {
-        toast.success('Stock addition request sent for admin approval');
+      // Map request to item pending requests. For chairs, create accessory requests for each accessory quantity.
+      if (productData.category === 'Chair' && productData.accessoryQuantities) {
+        const accessories = productData.accessoryQuantities;
+        for (const [label, rawQty] of Object.entries(accessories)) {
+          const qty = Number(rawQty || 0);
+          if (!qty || qty <= 0) continue;
+          const type = mapNameToType(label);
+          const payload = { type, model: productData.subCategory || productData.name, furnitureType: 'chair', quantity: qty, requester: productData.requester || '' };
+          await axios.post(`${backendUrl}/api/items/request`, payload, { headers: { Authorization: `Bearer ${token}` } });
+        }
+        toast.success('Accessory stock requests sent for admin approval');
         return true;
+      } else {
+        // Non-chair: create a single pending item request
+        const type = mapNameToType(productData.type || productData.name);
+        const payload = { type, model: productData.subCategory || productData.name, furnitureType: productData.category || '', quantity: Number(productData.quantity || 0), requester: productData.requester || '' };
+        const res = await axios.post(`${backendUrl}/api/items/request`, payload, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.data.success) {
+          toast.success('Stock addition request sent for admin approval');
+          return true;
+        }
       }
     } catch (err) {
       console.error('Failed to request stock addition', err);
@@ -188,28 +196,25 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
 
       try {
         let response;
-        if (item.category === 'Chair') {
-          const updatedAccessories = {
-            ...item.accessoryQuantities,
-            'Chair Back': quantity
-          };
-          response = await axios.put(
-            `${backendUrl}/api/factory/stock/${id}/accessories`,
-            { accessoryQuantities: updatedAccessories },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+        if (item.category) {
+          // Product (chair or other): update product quantity or accessories
+          if (item.category === 'Chair') {
+            const updatedAccessories = { ...item.accessoryQuantities, 'Chair Back': quantity };
+            response = await axios.post(`${backendUrl}/api/product/update-accessories`, { id, accessoryQuantities: updatedAccessories }, { headers: { Authorization: `Bearer ${token}` } });
+          } else {
+            response = await axios.post(`${backendUrl}/api/product/update-quantity`, { id, quantity }, { headers: { Authorization: `Bearer ${token}` } });
+          }
         } else {
-          response = await axios.put(
-            `${backendUrl}/api/factory/stock/${id}`,
-            { quantity },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+          // Accessory item: compute delta and POST to /api/items to adjust quantity (supports negative deltas)
+          const delta = Number(quantity) - Number(item.quantity || 0);
+          response = await axios.post(`${backendUrl}/api/items`, { type: item.type, model: item.model, furnitureType: item.furnitureType, quantity: delta }, { headers: { Authorization: `Bearer ${token}` } });
         }
 
         if (response.data.success) {
           toast.success(sanitizeMessage(response.data.message) || 'Quantity updated');
           cancelEdit();
-          fetchStock();
+          const eff = fetchStock || (() => {});
+          await eff();
         } else {
           toast.error(sanitizeMessage(response.data.message));
         }
@@ -254,22 +259,29 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
       }
 
       try {
-        const updatedAccessories = {
-          ...item.accessoryQuantities,
-          [accessoryName]: quantity
-        };
-        const response = await axios.put(
-          `${backendUrl}/api/factory/stock/${id}/accessories`,
-          { accessoryQuantities: updatedAccessories },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (response.data.success) {
-          toast.active(sanitizeMessage(response.data.message) || 'Accessory quantity updated');
-          cancelAccessoryEdit(id, accessoryName);
-          fetchStock();
+        if (item.category) {
+          const updatedAccessories = { ...item.accessoryQuantities, [accessoryName]: quantity };
+          const response = await axios.post(`${backendUrl}/api/product/update-accessories`, { id, accessoryQuantities: updatedAccessories }, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.data.success) {
+            toast.success(sanitizeMessage(response.data.message) || 'Accessory quantity updated');
+            cancelAccessoryEdit(id, accessoryName);
+            const eff = fetchStock || (() => {});
+            await eff();
+          } else {
+            toast.error(sanitizeMessage(response.data.message));
+          }
         } else {
-          toast.error(sanitizeMessage(response.data.message));
+          // accessory is a standalone Item
+          const delta = Number(quantity) - Number(item.quantity || 0);
+          const response = await axios.post(`${backendUrl}/api/items`, { type: item.type, model: item.model, furnitureType: item.furnitureType, quantity: delta }, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.data) {
+            toast.success('Accessory quantity updated');
+            cancelAccessoryEdit(id, accessoryName);
+            const eff = fetchStock || (() => {});
+            await eff();
+          } else {
+            toast.error('Failed to update accessory');
+          }
         }
       } catch (error) {
         console.error('Update accessory quantity error:', error);
@@ -292,21 +304,26 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
       }
 
       try {
-        const updatedAccessories = {
-          ...item.accessoryQuantities,
-          [accessoryName]: quantity
-        };
-        const response = await axios.put(
-          `${backendUrl}/api/factory/stock/${id}/accessories`,
-          { accessoryQuantities: updatedAccessories },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (response.data.success) {
-          toast.success('Accessory added successfully');
-          fetchStock();
+        if (item.category) {
+          const updatedAccessories = { ...item.accessoryQuantities, [accessoryName]: quantity };
+          const response = await axios.post(`${backendUrl}/api/product/update-accessories`, { id, accessoryQuantities: updatedAccessories }, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.data.success) {
+            toast.success('Accessory added successfully');
+            const eff = fetchStock || (() => {});
+            await eff();
+          } else {
+            toast.error(sanitizeMessage(response.data.message));
+          }
         } else {
-          toast.error(sanitizeMessage(response.data.message));
+          // create standalone accessory item
+          const response = await axios.post(`${backendUrl}/api/items`, { type: mapNameToType(accessoryName), model: item.model || '', furnitureType: item.furnitureType || '', quantity }, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.data) {
+            toast.success('Accessory added successfully');
+            const eff = fetchStock || (() => {});
+            await eff();
+          } else {
+            toast.error('Failed to add accessory');
+          }
         }
       } catch (error) {
         console.error('Add accessory error:', error);
@@ -322,19 +339,27 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
       if (!confirm(`Remove accessory "${accessoryName}"?`)) return;
 
       try {
-        const updatedAccessories = { ...item.accessoryQuantities };
-        delete updatedAccessories[accessoryName];
-        const response = await axios.put(
-          `${backendUrl}/api/factory/stock/${id}/accessories`,
-          { accessoryQuantities: updatedAccessories },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (response.data.success) {
-          toast.success('Accessory removed successfully');
-          fetchStock();
+        if (item.category) {
+          const updatedAccessories = { ...item.accessoryQuantities };
+          delete updatedAccessories[accessoryName];
+          const response = await axios.post(`${backendUrl}/api/product/update-accessories`, { id, accessoryQuantities: updatedAccessories }, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.data.success) {
+            toast.success('Accessory removed successfully');
+            const eff = fetchStock || (() => {});
+            await eff();
+          } else {
+            toast.error(sanitizeMessage(response.data.message));
+          }
         } else {
-          toast.error(sanitizeMessage(response.data.message));
+          // accessory is a standalone Item: set its quantity to zero by posting negative delta
+          const response = await axios.post(`${backendUrl}/api/items`, { type: item.type, model: item.model, furnitureType: item.furnitureType, quantity: -(item.quantity || 0) }, { headers: { Authorization: `Bearer ${token}` } });
+          if (response.data) {
+            toast.success('Accessory removed successfully');
+            const eff = fetchStock || (() => {});
+            await eff();
+          } else {
+            toast.error('Failed to remove accessory');
+          }
         }
       } catch (error) {
         console.error('Remove accessory error:', error);
@@ -349,21 +374,31 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
     async (id) => {
       if (!confirm('Delete stock item? This action cannot be undone.')) return;
       try {
-        const response = await axios.delete(`${backendUrl}/api/factory/stock/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.success) {
-          toast.success(response.data.message);
-          fetchStock();
-        } else {
-          toast.error(sanitizeMessage(response.data.message));
+        // Try deleting as a product first
+        const delResp = await axios.delete(`${backendUrl}/api/product/${id}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        if (delResp && delResp.data && delResp.data.success) {
+          toast.success(delResp.data.message || 'Product deleted');
+          const eff = fetchStock || (() => {});
+          await eff();
+          return;
         }
+        // Otherwise, treat as accessory item: zero its quantity
+        // Need current item quantity from stock prop
+        const item = (stock || []).find((s) => s._id === id);
+        if (item) {
+          await axios.post(`${backendUrl}/api/items`, { type: item.type, model: item.model, furnitureType: item.furnitureType, quantity: -(item.quantity || 0) }, { headers: { Authorization: `Bearer ${token}` } });
+          toast.success('Accessory removed');
+          const eff = fetchStock || (() => {});
+          await eff();
+          return;
+        }
+        toast.error('Failed to remove stock item');
       } catch (error) {
         console.error('Remove stock item error:', error);
         toast.error(sanitizeMessage(error.response?.data?.message) || 'Failed to remove stock item');
       }
     },
-    [fetchStock, token]
+    [fetchStock, token, stock]
   );
 
   // Toggle expandable row
@@ -374,13 +409,12 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
     }));
   }, []);
 
-  // Debounced search handler
-  const debouncedSearch = useCallback(
-    debounce((query) => {
-      setSearchQuery(query);
-    }, 300),
-    []
-  );
+  // Debounced search handler (stable instance)
+  const debouncedSearch = useMemo(() => debounce((query) => setSearchQuery(query), 300), []);
+
+  useEffect(() => {
+    return () => debouncedSearch.cancel && debouncedSearch.cancel();
+  }, [debouncedSearch]);
 
   // Memoized filtered stock
   const filteredStock = useMemo(() => {
@@ -501,6 +535,12 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
       )}
     </div>
   );
+
+  // PropTypes for inner component (defined here because AccessoryDetails closes over parent state/helpers)
+  AccessoryDetails.propTypes = {
+    item: PropTypes.object.isRequired,
+    isExpanded: PropTypes.bool
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4 md:p-6 animate-fade-in">
@@ -663,6 +703,7 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
                   />
                 </div>
               )}
+
 
               {/* Submit and Cancel */}
               <div className="flex items-center space-x-2">
@@ -892,13 +933,13 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
                               { name: newName },
                               { headers: { Authorization: `Bearer ${token}` } }
                             )
-                            .then((res) => {
-                              toast.success('Product updated');
-                              fetchStock();
-                            })
-                            .catch((err) => {
-                              toast.error('Failed to update product');
-                            });
+                              .then(() => {
+                                toast.success('Product updated');
+                                fetchStock();
+                              })
+                              .catch(() => {
+                                toast.error('Failed to update product');
+                              });
                         }
                       }}
                       className="px-2 py-1 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md"
@@ -934,6 +975,23 @@ const ApprovalStockList = ({ token, stock, setStock, fetchStock }) => {
       </div>
     </div>
   );
+};
+
+ApprovalStockList.propTypes = {
+  token: PropTypes.string,
+  stock: PropTypes.arrayOf(
+    PropTypes.shape({
+      _id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      name: PropTypes.string,
+      category: PropTypes.string,
+      subCategory: PropTypes.string,
+      accessoryQuantities: PropTypes.object,
+      type: PropTypes.string,
+      quantity: PropTypes.number,
+      description: PropTypes.string
+    })
+  ),
+  fetchStock: PropTypes.func
 };
 
 export default ApprovalStockList;

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { Package, ShoppingCart, DollarSign, Store } from 'lucide-react';
 
-const ShopSidebar = ({ shopId, onFetchStock, onFetchOrders, onScrollToSales }) => {
+const ShopSidebar = ({ shopId = '', onFetchStock = () => {}, onFetchOrders = () => {}, onScrollToSales = () => {} }) => {
   return (
     <div className="fixed bottom-0 w-full sm:static sm:w-16 md:w-64 min-h-[60px] sm:min-h-screen bg-white text-gray-800 shadow-lg sm:shadow-xl flex flex-row sm:flex-col border-t sm:border-t-0 sm:border-r border-gray-200 z-50 animate-fade-in">
       {/* Header */}
@@ -46,13 +46,6 @@ ShopSidebar.propTypes = {
   onFetchStock: PropTypes.func,
   onFetchOrders: PropTypes.func,
   onScrollToSales: PropTypes.func,
-};
-
-ShopSidebar.defaultProps = {
-  shopId: '',
-  onFetchStock: () => {},
-  onFetchOrders: () => {},
-  onScrollToSales: () => {},
 };
 
 const ShopSidebarLink = ({ to, icon: Icon, label, onClick }) => {

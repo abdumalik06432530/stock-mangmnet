@@ -4,7 +4,8 @@ import axios from 'axios';
 import { Package, Truck, CheckCircle, Filter } from 'lucide-react';
 import { backendUrl } from '../../config';
 
-const OrdersTab = ({ orders, setOrders, loading, stock, drivers, token }) => {
+const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }) => {
+  const [orders, setLocalOrders] = useState(initialOrders || []);
   const [filterStatus, setFilterStatus] = useState('all');
   const [driverAssignments, setDriverAssignments] = useState({});
   const [localDrivers, setLocalDrivers] = useState(drivers || []);
@@ -16,6 +17,24 @@ const OrdersTab = ({ orders, setOrders, loading, stock, drivers, token }) => {
     setLocalDrivers(drivers || []);
   }, [drivers]);
 
+  // Fetch orders from DB on mount or when token changes
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const res = await axios.get(`${backendUrl}/api/orders`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data.success && Array.isArray(res.data.orders)) {
+          setLocalOrders(res.data.orders);
+          if (setOrders) setOrders(res.data.orders);
+        }
+      } catch (err) {
+        console.error('Failed to fetch orders', err);
+      }
+    };
+    if (token) fetchOrders();
+  }, [token, setOrders]);
+
   const filteredOrders = orders.filter(
     (order) => filterStatus === 'all' || order.status === filterStatus
   );
@@ -25,25 +44,27 @@ const OrdersTab = ({ orders, setOrders, loading, stock, drivers, token }) => {
       const order = orders.find((o) => o._id === orderId);
       if (!order) return;
 
-      const stockItem = stock.find((s) => s.productType === order.furnitureType);
-      if (!stockItem || stockItem.quantity < order.quantity) {
-        toast.error('Insufficient stock to accept order');
-        return;
-      }
-
+      // Accept order in DB (status: accepted)
       const res = await axios.put(
         `${backendUrl}/api/orders/${orderId}/accept`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (res.data.success) {
-        setOrders((prev) =>
-          prev.map((order) =>
-            order._id === orderId ? { ...order, status: 'Pending Approval' } : order
+      if (res.data.success && res.data.order) {
+        setLocalOrders((prev) =>
+          prev.map((o) =>
+            o._id === orderId ? { ...o, status: res.data.order.status || 'accepted' } : o
+          )
+        );
+        if (setOrders) setOrders((prev) =>
+          prev.map((o) =>
+            o._id === orderId ? { ...o, status: res.data.order.status || 'accepted' } : o
           )
         );
         toast.success('Order accepted and sent for admin approval');
+      } else {
+        toast.error(res.data.message || 'Failed to accept order');
       }
     } catch (err) {
       console.error('Failed to accept order', err);
@@ -65,25 +86,24 @@ const OrdersTab = ({ orders, setOrders, loading, stock, drivers, token }) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (res.data.success) {
-        const order = orders.find((o) => o._id === orderId);
-        setOrders((prev) =>
-          prev.map((order) =>
-            order._id === orderId
-              ? { ...order, status: 'Out for Delivery', driver: driver.name, driverId }
-              : order
+      if (res.data.success && res.data.order) {
+        setLocalOrders((prev) =>
+          prev.map((o) =>
+            o._id === orderId
+              ? { ...o, status: res.data.order.status || 'assigned', driver: driver.name, driverId }
+              : o
           )
         );
-
-        setStock((prev) =>
-          prev.map((item) =>
-            item.productType === order.furnitureType
-              ? { ...item, quantity: Math.max(0, item.quantity - order.quantity) }
-              : item
+        if (setOrders) setOrders((prev) =>
+          prev.map((o) =>
+            o._id === orderId
+              ? { ...o, status: res.data.order.status || 'assigned', driver: driver.name, driverId }
+              : o
           )
         );
-
         toast.success(`Driver ${driver.name} assigned to order`);
+      } else {
+        toast.error(res.data.message || 'Failed to assign driver');
       }
     } catch (err) {
       console.error('Failed to assign driver', err);
@@ -99,13 +119,20 @@ const OrdersTab = ({ orders, setOrders, loading, stock, drivers, token }) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (res.data.success) {
-        setOrders((prev) =>
-          prev.map((order) =>
-            order._id === orderId ? { ...order, status: 'Delivered' } : order
+      if (res.data.success && res.data.order) {
+        setLocalOrders((prev) =>
+          prev.map((o) =>
+            o._id === orderId ? { ...o, status: res.data.order.status || 'delivered' } : o
           )
         );
-        toast.success('Order marked as delivered');
+        if (setOrders) setOrders((prev) =>
+          prev.map((o) =>
+            o._id === orderId ? { ...o, status: res.data.order.status || 'delivered' } : o
+          )
+        );
+        toast.success('Order marked as delivered and stock updated');
+      } else {
+        toast.error(res.data.message || 'Failed to mark as delivered');
       }
     } catch (err) {
       console.error('Failed to update order status', err);
@@ -386,6 +413,16 @@ const OrdersTab = ({ orders, setOrders, loading, stock, drivers, token }) => {
       </div>
     </div>
   );
+};
+
+import PropTypes from 'prop-types';
+
+OrdersTab.propTypes = {
+  orders: PropTypes.array.isRequired,
+  setOrders: PropTypes.func.isRequired,
+  loading: PropTypes.bool,
+  drivers: PropTypes.array,
+  token: PropTypes.string,
 };
 
 export default OrdersTab;
