@@ -12,6 +12,7 @@ const adminRoutes = require('./routes/admin');
 const usersRoutes = require('./routes/users');
 const shopsRoutes = require('./routes/shops');
 const shopkeeperRoutes = require('./routes/shopkeeper');
+const driversRoutes = require('./routes/drivers');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
@@ -29,6 +30,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/user', usersRoutes);
 app.use('/api/shops', shopsRoutes);
 app.use('/api/shopkeeper', shopkeeperRoutes);
+app.use('/api/drivers', driversRoutes);
 
 // basic health
 app.get('/api/health', (req, res) => res.json({ ok: true }));
