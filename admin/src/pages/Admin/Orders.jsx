@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import PropTypes from 'prop-types';
 import axios from "axios";
 import { backendUrl } from "../../config";
@@ -13,25 +13,7 @@ const Orders = ({ token }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Token validation
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" aria-hidden="true" />
-          <h3 className="text-base font-bold text-gray-900">Unauthorized Access</h3>
-          <p className="text-xs text-gray-600 mt-2">Please log in to access the Orders.</p>
-          <button
-            onClick={() => (window.location.href = "/login")}
-            className="mt-3 px-4 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md text-xs"
-            aria-label="Go to login page"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // (Token check moved below to ensure hooks are called in a stable order)
 
   const fetchAllOrders = useCallback(async () => {
     setIsLoading(true);
@@ -119,18 +101,34 @@ const Orders = ({ token }) => {
   }, [fetchAllOrders]);
 
   useEffect(() => {
-    const filtered = orders.filter((order) =>
-      [
-        order._id,
-        `${order.address.firstName} ${order.address.lastName}`,
-        order.address.city,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
-    );
+    const filtered = orders.filter((order) => {
+      const id = order._id || '';
+      const first = order.address?.firstName || order.customer?.firstName || order.user?.firstName || '';
+      const last = order.address?.lastName || order.customer?.lastName || order.user?.lastName || '';
+      const city = order.address?.city || order.city || '';
+      return [id, `${first} ${last}`.trim(), city].join(' ').toLowerCase().includes(searchQuery.toLowerCase());
+    });
     setFilteredOrders(filtered);
   }, [searchQuery, orders]);
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" aria-hidden="true" />
+          <h3 className="text-base font-bold text-gray-900">Unauthorized Access</h3>
+          <p className="text-xs text-gray-600 mt-2">Please log in to access the Orders.</p>
+          <button
+            onClick={() => (window.location.href = "/login")}
+            className="mt-3 px-4 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md text-xs"
+            aria-label="Go to login page"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-purple-50 p-4 md:p-6 animate-fade-in">
@@ -183,7 +181,18 @@ const Orders = ({ token }) => {
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredOrders.map((order, index) => (
+            {filteredOrders.map((order, index) => {
+              const addr = order.address || {};
+              const firstName = addr.firstName || order.customer?.firstName || order.user?.firstName || 'Unknown';
+              const lastName = addr.lastName || order.customer?.lastName || order.user?.lastName || '';
+              const street = addr.street || '';
+              const city = addr.city || '';
+              const state = addr.state || '';
+              const country = addr.country || '';
+              const zipcode = addr.zipcode || '';
+              const phone = addr.phone || order.customer?.phone || '';
+
+              return (
               <div
                 key={order._id}
                 className="bg-white shadow-md rounded-xl p-4 border border-gray-200 hover:shadow-lg transition-all duration-200"
@@ -200,20 +209,20 @@ const Orders = ({ token }) => {
                   <div className="space-y-3">
                     <div className="bg-indigo-50 p-3 rounded-lg shadow-sm">
                       <p className="font-semibold text-sm text-gray-900">
-                        {order.address.firstName} {order.address.lastName}
+                        {firstName} {lastName}
                       </p>
                       <p className="text-xs text-gray-600">
-                        {order.address.street}, {order.address.city}, {order.address.state}
+                        {street}{street && city ? ', ' : ''}{city}{city && state ? ', ' : ''}{state}
                       </p>
                       <p className="text-xs text-gray-600">
-                        {order.address.country} - {order.address.zipcode}
+                        {country} {zipcode ? `- ${zipcode}` : ''}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        <p className="text-xs text-gray-600">{order.address.phone}</p>
+                        <p className="text-xs text-gray-600">{phone}</p>
                         <a
-                          href={`tel:${order.address.phone}`}
+                          href={`tel:${phone}`}
                           className="px-2 py-1 bg-green-600 text-white rounded-lg text-xs hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md"
-                          aria-label={`Call ${order.address.phone}`}
+                          aria-label={`Call ${phone}`}
                         >
                           <Phone className="h-3 w-3 inline-block mr-1" /> Call
                         </a>
@@ -222,7 +231,7 @@ const Orders = ({ token }) => {
                     <div>
                       <p className="text-xs font-semibold text-gray-700 mb-2">Items:</p>
                       <div className="space-y-2">
-                        {order.items.map((item, idx) => {
+                        {(order.items || []).map((item, idx) => {
                           const displayColor = item.color || item.size || "N/A";
                           const swatchColor = item.color || item.size || "";
                           return (
@@ -305,7 +314,7 @@ const Orders = ({ token }) => {
                       <Package className="h-4 w-4 text-indigo-600" />
                       <span className="font-semibold">Quantity:</span>
                       <span className="font-bold text-indigo-600">
-                        {order.items.reduce((total, item) => total + item.quantity, 0)}
+                        {(order.items || []).reduce((total, item) => total + (item.quantity || 0), 0)}
                       </span>
                     </p>
                     <p className="flex items-center gap-2 mt-2">
@@ -359,7 +368,8 @@ const Orders = ({ token }) => {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 

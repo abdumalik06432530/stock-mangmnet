@@ -34,13 +34,14 @@ const StockControl = ({ token, shopId }) => {
     setIsFetching(true);
     try {
       // Prefer fetching items (components, backs, etc.) and aggregate into a simple stock map
-      const [itemsRes, productsRes] = await Promise.all([
-        axios.get(`${backendUrl}/api/items`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${backendUrl}/api/product/list`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+      // If a shopId is provided, prefer fetching shop-specific items which include
+      // both accessories and delivered finished-products (created as Item records
+      // tied to the shop). When no shopId is present, fall back to fetching
+      // global items and products separately.
+      const itemsUrl = `${backendUrl}/api/items${shopId ? `?shop=${shopId}` : ''}`;
+      const itemsRes = await axios.get(itemsUrl, { headers: { Authorization: `Bearer ${token}` } });
 
       const items = Array.isArray(itemsRes.data) ? itemsRes.data : (itemsRes.data.items || []);
-      const products = (productsRes.data && (productsRes.data.products || productsRes.data)) || [];
 
       // build a simple stock map: label -> total quantity
       const map = {};
@@ -52,15 +53,20 @@ const StockControl = ({ token, shopId }) => {
       };
 
       for (const it of items) {
+        // If viewing a specific shop, show only finished products (type === 'product').
+        // Accessories/components (arms, mechanisms, backs, etc.) are stored as
+        // Items too but should be hidden from the shop-level product view per
+        // the user's request.
+        if (shopId && String((it.type || '')).toLowerCase() !== 'product') continue;
+
         const label = labelFor(it).replace(/\s+/g, '_').toLowerCase();
         map[label] = (map[label] || 0) + (Number(it.quantity || 0));
       }
 
-      // include finished products as separate entries (optional)
-      for (const p of products) {
-        const label = (p.model || p.name || 'product').toString().replace(/\s+/g, '_').toLowerCase();
-        map[label] = Math.max(map[label] || 0, Number(p.quantity || 0));
-      }
+      // Note: we use Items collection only. Finished products that were
+      // delivered to a shop are represented as Items of type 'product' tied
+      // to that shop, so there's no need to read from the global products DB
+      // for shop-visible stock.
 
       setStock(map);
     } catch (error) {
@@ -98,22 +104,43 @@ const StockControl = ({ token, shopId }) => {
 
   const submitNewItem = async (e) => {
     e.preventDefault();
-    if (!newItem.name || !newItem.category || !newItem.subCategory || !newItem.quantity) {
-      toast.info('Please fill all required fields');
-      return;
+    // When a shopId is provided, shops can only request finished products
+    // (not accessories). Validate accordingly.
+    if (shopId) {
+      if (!newItem.name || !newItem.quantity) {
+        toast.info('Please fill all required fields');
+        return;
+      }
+    } else {
+      if (!newItem.name || !newItem.category || !newItem.subCategory || !newItem.quantity) {
+        toast.info('Please fill all required fields');
+        return;
+      }
     }
 
     setLoading(true);
     try {
       // items/request API expects: { type, model, furnitureType, quantity, optional, requester }
-      const payload = {
-        type: (newItem.type || newItem.name).toString().toLowerCase().replace(/\s+/g, '_'),
-        model: newItem.name,
-        furnitureType: (newItem.category || '').toString().toLowerCase(),
-        quantity: parseInt(newItem.quantity, 10),
-        optional: false,
-        requester: shopId || undefined,
-      };
+      // If shopId is present, force requests to be for finished products.
+      const payload = shopId
+        ? {
+            type: 'product',
+            model: newItem.name,
+            furnitureType: (newItem.category || 'product').toString().toLowerCase(),
+            quantity: parseInt(newItem.quantity, 10),
+            optional: false,
+            shop: shopId,
+            requester: shopId,
+          }
+        : {
+            type: (newItem.type || newItem.name).toString().toLowerCase().replace(/\s+/g, '_'),
+            model: newItem.name,
+            furnitureType: (newItem.category || '').toString().toLowerCase(),
+            quantity: parseInt(newItem.quantity, 10),
+            optional: false,
+            shop: shopId || undefined,
+            requester: shopId || undefined,
+          };
 
       const response = await axios.post(`${backendUrl}/api/items/request`, payload, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -348,36 +375,39 @@ const StockControl = ({ token, shopId }) => {
                 <label htmlFor="category" className="block text-[10px] font-semibold text-gray-700">
                   Category *
                 </label>
-                {isCustomCategory ? (
-                  <input
-                    id="category"
-                    type="text"
-                    value={newItem.category}
-                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                    placeholder="Enter custom category"
-                    required
-                    className="w-full p-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    aria-label="Custom category"
-                  />
-                ) : (
-                  <select
-                    id="category"
-                    value={newItem.category}
-                    onChange={(e) => {
-                      setNewItem({ ...newItem, category: e.target.value });
-                      setIsCustomCategory(e.target.value === 'Others');
-                    }}
-                    required
-                    className="w-full p-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    aria-label="Select category"
-                  >
-                    <option value="">Select Category</option>
-                    {predefinedCategories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                {/* When viewing shop-specific stock, shops should not set accessory categories */}
+                {!shopId && (
+                  (isCustomCategory ? (
+                    <input
+                      id="category"
+                      type="text"
+                      value={newItem.category}
+                      onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+                      placeholder="Enter custom category"
+                      required
+                      className="w-full p-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      aria-label="Custom category"
+                    />
+                  ) : (
+                    <select
+                      id="category"
+                      value={newItem.category}
+                      onChange={(e) => {
+                        setNewItem({ ...newItem, category: e.target.value });
+                        setIsCustomCategory(e.target.value === 'Others');
+                      }}
+                      required
+                      className="w-full p-1 border border-gray-200 rounded-lg bg-gray-50 text-[10px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      aria-label="Select category"
+                    >
+                      <option value="">Select Category</option>
+                      {predefinedCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  ))
                 )}
               </div>
               <div>
@@ -424,7 +454,8 @@ const StockControl = ({ token, shopId }) => {
                   aria-label="Item description"
                 />
               </div>
-              {newItem.category && newItem.category !== 'Chair' && !isCustomCategory && (
+              {/* Only allow setting accessory 'type' when not a shop-specific request */}
+              {!shopId && newItem.category && newItem.category !== 'Chair' && !isCustomCategory && (
                 <div>
                   <label htmlFor="type" className="block text-[10px] font-semibold text-gray-700">
                     Type

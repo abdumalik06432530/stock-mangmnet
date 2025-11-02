@@ -27,6 +27,21 @@ router.post('/orders/:id/deliver', async (req, res) => {
       if (prod) {
         prod.quantity = (prod.quantity || 0) + (order.quantity || 0);
         await prod.save();
+        // Also increment shop-specific finished-product stock (create Item of type 'product')
+        try {
+          if (order.shop) {
+            const shopProduct = await Item.findOne({ type: 'product', model: prod.model || prod.subCategory || prod.name, shop: order.shop });
+            if (shopProduct) {
+              shopProduct.quantity = (shopProduct.quantity || 0) + (order.quantity || 0);
+              await shopProduct.save();
+            } else {
+              const it = new Item({ type: 'product', model: prod.model || prod.subCategory || prod.name, furnitureType: prod.category || '', quantity: order.quantity || 0, shop: order.shop });
+              await it.save();
+            }
+          }
+        } catch (e) {
+          console.error('failed to update shop product stock', e);
+        }
       }
     }
 
@@ -67,8 +82,16 @@ router.post('/sales', async (req, res) => {
 // Get shop visible stock (returns products and quantities)
 router.get('/stock', async (req, res) => {
   try {
-    const products = await Product.find().lean();
-    return res.json({ success: true, products });
+    const { shop } = req.query;
+    // Always return Items collection for shop-visible stock. If `shop` is
+    // provided, filter Items by shop. Avoid reading from the global Product
+    // collection here because each shop maintains its own visible Item
+    // records (delivered finished products are created as Item documents
+    // tied to the receiving shop).
+    const query = {};
+    if (shop) query.shop = shop;
+    const items = await Item.find(query).lean();
+    return res.json({ success: true, items });
   } catch (err) {
     console.error('shopkeeper stock error', err);
     res.status(500).json({ success: false, message: 'server_error' });
