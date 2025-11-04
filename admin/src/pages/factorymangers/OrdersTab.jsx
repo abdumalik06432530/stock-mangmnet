@@ -12,6 +12,55 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
   const [showCreateForm, setShowCreateForm] = useState({});
   const [driverForm, setDriverForm] = useState({});
 
+  // Helpers to map backend status keys into UI groups and labels
+  const statusGroup = (s) => {
+    const key = (s || '').toString().toLowerCase();
+    if (['requested', 'pending'].includes(key)) return 'pending';
+    if (['factory_accepted', 'pending_approval', 'pendingapproval'].includes(key)) return 'pendingApproval';
+    if (['accepted', 'admin_approved', 'processing'].includes(key)) return 'processing';
+    if (['assigned', 'out_for_delivery', 'out for delivery', 'outfordelivery'].includes(key)) return 'outForDelivery';
+    if (key === 'delivered') return 'delivered';
+    return 'other';
+  };
+
+  const statusLabel = (s) => {
+    const map = {
+      pending: 'Pending',
+      pendingApproval: 'Pending Approval',
+      processing: 'Processing',
+      outForDelivery: 'Out for Delivery',
+      delivered: 'Delivered',
+      other: s || 'Unknown',
+    };
+    return map[statusGroup(s)];
+  };
+
+  const statusBadgeClasses = (s) => {
+    const g = statusGroup(s);
+    return g === 'pending'
+      ? 'bg-yellow-100 text-yellow-600'
+      : g === 'pendingApproval'
+      ? 'bg-orange-100 text-orange-600'
+      : g === 'processing'
+      ? 'bg-blue-100 text-blue-600'
+      : g === 'outForDelivery'
+      ? 'bg-purple-100 text-purple-600'
+      : 'bg-green-100 text-green-600';
+  };
+
+  const statusPillClasses = (s) => {
+    const g = statusGroup(s);
+    return g === 'pending'
+      ? 'bg-yellow-100 text-yellow-800'
+      : g === 'pendingApproval'
+      ? 'bg-orange-100 text-orange-800'
+      : g === 'processing'
+      ? 'bg-blue-100 text-blue-800'
+      : g === 'outForDelivery'
+      ? 'bg-purple-100 text-purple-800'
+      : 'bg-green-100 text-green-800';
+  };
+
   // Sync localDrivers with parent prop
   useEffect(() => {
     setLocalDrivers(drivers || []);
@@ -36,7 +85,7 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
   }, [token, setOrders]);
 
   const filteredOrders = orders.filter(
-    (order) => filterStatus === 'all' || order.status === filterStatus
+    (order) => filterStatus === 'all' || statusGroup(order.status) === filterStatus
   );
 
   const acceptOrder = async (orderId) => {
@@ -44,9 +93,9 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
       const order = orders.find((o) => o._id === orderId);
       if (!order) return;
 
-      // Accept order in DB (status: accepted)
+      // Accept order in DB (factory acceptance)
       const res = await axios.put(
-        `${backendUrl}/api/orders/${orderId}/accept`,
+        `${backendUrl}/api/orders/${orderId}/factory-accept`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -54,12 +103,12 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
       if (res.data.success && res.data.order) {
         setLocalOrders((prev) =>
           prev.map((o) =>
-            o._id === orderId ? { ...o, status: res.data.order.status || 'accepted' } : o
+            o._id === orderId ? { ...o, status: res.data.order.status || 'factory_accepted' } : o
           )
         );
         if (setOrders) setOrders((prev) =>
           prev.map((o) =>
-            o._id === orderId ? { ...o, status: res.data.order.status || 'accepted' } : o
+            o._id === orderId ? { ...o, status: res.data.order.status || 'factory_accepted' } : o
           )
         );
         toast.success('Order accepted and sent for admin approval');
@@ -188,11 +237,11 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
             aria-label="Filter orders by status"
           >
             <option value="all">All Statuses</option>
-            <option value="Pending">Pending</option>
-            <option value="Pending Approval">Pending Approval</option>
-            <option value="Processing">Processing</option>
-            <option value="Out for Delivery">Out for Delivery</option>
-            <option value="Delivered">Delivered</option>
+            <option value="pending">Pending</option>
+            <option value="pendingApproval">Pending Approval</option>
+            <option value="processing">Processing</option>
+            <option value="outForDelivery">Out for Delivery</option>
+            <option value="delivered">Delivered</option>
           </select>
         </div>
       </div>
@@ -218,19 +267,7 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    <div
-                      className={`p-2 rounded-full ${
-                        order.status === 'Pending'
-                          ? 'bg-yellow-100 text-yellow-600'
-                          : order.status === 'Pending Approval'
-                          ? 'bg-orange-100 text-orange-600'
-                          : order.status === 'Processing'
-                          ? 'bg-blue-100 text-blue-600'
-                          : order.status === 'Out for Delivery'
-                          ? 'bg-purple-100 text-purple-600'
-                          : 'bg-green-100 text-green-600'
-                      }`}
-                    >
+                    <div className={`p-2 rounded-full ${statusBadgeClasses(order.status)}`}>
                       <Package className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div>
@@ -243,20 +280,8 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
                       </p>
                     </div>
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      order.status === 'Pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : order.status === 'Pending Approval'
-                        ? 'bg-orange-100 text-orange-800'
-                        : order.status === 'Processing'
-                        ? 'bg-blue-100 text-blue-800'
-                        : order.status === 'Out for Delivery'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}
-                  >
-                    {order.status}
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusPillClasses(order.status)}`}>
+                    {statusLabel(order.status)}
                   </span>
                 </div>
 
@@ -278,7 +303,7 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-between pt-3 border-t border-gray-200 space-y-3 sm:space-y-0 sm:space-x-3">
-                  {order.status === 'Pending' && (
+                  {statusGroup(order.status) === 'pending' && (
                     <button
                       onClick={() => acceptOrder(order._id)}
                       className="flex items-center space-x-2 px-4 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md text-xs"
@@ -288,12 +313,12 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
                       <span>Accept Order</span>
                     </button>
                   )}
-                  {order.status === 'Pending Approval' && (
+                  {statusGroup(order.status) === 'pendingApproval' && (
                     <span className="text-orange-600 text-xs">
                       Waiting for admin approval...
                     </span>
                   )}
-                  {order.status === 'Processing' && (
+                  {statusGroup(order.status) === 'processing' && (
                     <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                       <div className="flex flex-col space-y-2 w-full sm:w-auto">
                         <select
@@ -389,7 +414,7 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
                       </button>
                     </div>
                   )}
-                  {order.status === 'Out for Delivery' && (
+                  {statusGroup(order.status) === 'outForDelivery' && (
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-2 text-purple-600 text-xs">
                         <Truck className="h-4 w-4" />

@@ -13,5 +13,4 @@ const PendingItemSchema = new mongoose.Schema({
   adminNotes: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
-
 module.exports = mongoose.model('PendingItem', PendingItemSchema);

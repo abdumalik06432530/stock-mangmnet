@@ -100,6 +100,28 @@ const Orders = ({ token }) => {
     fetchAllOrders();
   }, [fetchAllOrders]);
 
+  const approveOrder = useCallback(
+    async (orderId) => {
+      try {
+        const res = await axios.put(
+          `${backendUrl}/api/orders/${orderId}/admin-approve`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.data.success && res.data.order) {
+          await fetchAllOrders();
+          toast.success('Order approved');
+        } else {
+          toast.error(res.data.message || 'Failed to approve order');
+        }
+      } catch (err) {
+        console.error('Approve order error', err);
+        toast.error(err.response?.data?.message || 'Failed to approve order');
+      }
+    },
+    [fetchAllOrders, token]
+  );
+
   useEffect(() => {
     const filtered = orders.filter((order) => {
       const id = order._id || '';
@@ -363,6 +385,15 @@ const Orders = ({ token }) => {
                         aria-label={`Delete order ${order._id}`}
                       >
                         <Trash2 className="h-3 w-3" /> Delete
+                      </button>
+                    )}
+                    {order.status === 'factory_accepted' && (
+                      <button
+                        onClick={() => approveOrder(order._id)}
+                        className="mt-2 px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs hover:bg-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                        aria-label={`Approve order ${order._id}`}
+                      >
+                        Approve
                       </button>
                     )}
                   </div>
