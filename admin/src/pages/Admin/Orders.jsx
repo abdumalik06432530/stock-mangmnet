@@ -41,26 +41,54 @@ const Orders = ({ token }) => {
     }
   }, [token]);
 
-  const statusHandler = useCallback(
-    async (event, orderId) => {
+  
+
+  const actionHandler = useCallback(
+    async (action, order) => {
       try {
-        const response = await axios.post(
-          `${backendUrl}/api/order/status`,
-          { orderId, status: event.target.value },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (response.data.success) {
-          toast.success("Status updated successfully");
-          await fetchAllOrders();
-        } else {
-          toast.error(response.data.message);
+        if (action === 'approve') {
+          await approveOrder(order._id);
+          return;
         }
-      } catch (error) {
-        console.error("Update status error:", error);
-        toast.error("Failed to update status");
+
+        if (action === 'assign') {
+          const driverId = window.prompt('Enter driver id to assign (or driver _id):');
+          if (!driverId) return toast.info('Driver assignment cancelled');
+          const res = await axios.put(
+            `${backendUrl}/api/orders/${order._id}/assign-driver`,
+            { driverId },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.data.success) {
+            toast.success('Driver assigned');
+            await fetchAllOrders();
+          } else {
+            toast.error(res.data.message || 'Failed to assign driver');
+          }
+          return;
+        }
+
+        if (action === 'deliver') {
+          // deliver will validate server-side that order is ready (admin_approved/assigned/out_for_delivery)
+          const res = await axios.put(
+            `${backendUrl}/api/orders/${order._id}/deliver`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.data.success) {
+            toast.success('Order marked as delivered');
+            await fetchAllOrders();
+          } else {
+            toast.error(res.data.message || 'Failed to mark delivered');
+          }
+          return;
+        }
+      } catch (err) {
+        console.error('Action error', err);
+        toast.error(err.response?.data?.message || 'Action failed');
       }
     },
-    [fetchAllOrders, token]
+    [approveOrder, fetchAllOrders, token]
   );
 
   const deleteHandler = useCallback(
@@ -362,23 +390,23 @@ const Orders = ({ token }) => {
                     <label className="font-semibold text-gray-700 text-xs">Status:</label>
                     <div className="relative">
                       <select
-                        onChange={(event) => statusHandler(event, order._id)}
-                        value={order.status}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // reset select UI after action
+                          e.target.value = '';
+                          if (val) actionHandler(val, order);
+                        }}
+                        value={''}
                         className="w-full p-2 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200 appearance-none"
-                        aria-label={`Update status for order ${order._id}`}
+                        aria-label={`Actions for order ${order._id}`}
                       >
-                        <option value="Order Accepted">Order Accepted</option>
-                        <option value="Order Placed">Order Placed</option>
-                        <option value="Packing">Packing</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Out for delivery">Out for delivery</option>
-                        <option value="Delivered">Delivered</option>
+                        <option value="">Select action...</option>
+                        <option value="approve">Approve (admin)</option>
+                        <option value="assign">Assign Driver</option>
+                        <option value="deliver">Mark Delivered</option>
                       </select>
-                      {order.status === "Order Accepted" && (
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500">✔</span>
-                      )}
                     </div>
-                    {order.status === "Delivered" && (
+                    {order.status === 'delivered' && (
                       <button
                         onClick={() => deleteHandler(order._id)}
                         className="mt-2 px-2 py-1 bg-red-50 text-red-600 rounded-lg text-xs hover:bg-red-100 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-1"
