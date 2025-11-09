@@ -169,13 +169,29 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
         toast.error(sanitizeMessage(response.data.message));
       }
       } catch (error) {
+        // Provide richer diagnostics to the UI & console. The backend returns useful details for 400s
+        const resp = error.response?.data;
         if (error.response?.status === 401) {
           toast.error('Unauthorized: Please log in again');
-        } else if (error.response?.status === 400 && (error.response.data?.message || '').includes('stock')) {
-          toast.error('Order rejected by factory: Insufficient stock');
+        } else if (error.response?.status === 400) {
+          // some backend errors include code/message/details
+          console.error('Order submit validation error:', resp || error.message || error);
+          const code = resp?.message || resp?.code || resp?.error;
+          if (code && String(code).toLowerCase().includes('insufficient')) {
+            // try to surface model details if available
+            const model = resp?.model || (resp?.details && resp.details.model) || '';
+            toast.error(
+              sanitizeMessage(code) + (model ? `: ${model}` : '') || 'Order rejected due to insufficient stock'
+            );
+          } else if (resp?.details) {
+            // generic details object — show a short summary
+            toast.error(sanitizeMessage(resp.message || JSON.stringify(resp.details).slice(0, 200)) || 'Order rejected');
+          } else {
+            toast.error(sanitizeMessage(resp?.message || resp?.error) || 'Failed to submit order');
+          }
         } else {
-          console.error('Order submit error:', error.response?.data || error.message || error);
-          toast.error(sanitizeMessage(error.response?.data?.message) || 'Failed to submit order');
+          console.error('Order submit error:', resp || error.message || error);
+          toast.error(sanitizeMessage(resp?.message) || 'Failed to submit order');
         }
       } finally {
         setLoading(false);
@@ -210,6 +226,16 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
     : [];
 
   const pendingOrders = orders.filter((order) => (order.status || '').toLowerCase() === 'pending');
+
+  // Helper to compute how many "items" an Order represents. Orders may be stored as
+  // a single-order document (with quantity) or as an items array (shopkeeper batch).
+  const getOrderItemCount = (order) => {
+    if (!order) return 0;
+    if (Array.isArray(order.items) && order.items.length > 0) return order.items.length;
+    // if order has quantity, treat that as the item count (number of identical items)
+    if (typeof order.quantity === 'number' && !Number.isNaN(order.quantity)) return order.quantity;
+    return 0;
+  };
 
   // If not authenticated, show a small message (hooks above still run)
   if (!token) {
@@ -446,7 +472,7 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
                 <div>
                   <p className="font-medium text-gray-900 text-[10px]">Order #{order._id.slice(-6)}</p>
                   <p className="text-[10px] text-gray-500">
-                    {new Date(order.createdAt).toLocaleDateString()}
+                    {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'Date unknown'}
                   </p>
                 </div>
                 <div className="flex items-center space-x-1">
@@ -463,6 +489,7 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
                   >
                     {order.status}
                   </span>
+                  <div className="text-[10px] text-gray-500 mr-2">{getOrderItemCount(order)} item{getOrderItemCount(order) !== 1 ? 's' : ''}</div>
                   <button
                     onClick={() => setSelectedOrder(order)}
                     className="text-indigo-600 hover:text-indigo-700 text-[10px]"
@@ -510,16 +537,29 @@ const OrderManagement = ({ token = null, shopId = '' }) => {
               <strong>Date:</strong> {new Date(selectedOrder.createdAt).toLocaleDateString()}
             </p>
             <p className="text-[10px]">
-              <strong>Items:</strong>
+              <strong>Items ({getOrderItemCount(selectedOrder)}):</strong>
             </p>
-            <ul className="list-disc pl-4 text-[10px]">
-              {selectedOrder.items.map((item, index) => (
-                <li key={index}>
-                  {item.name} ({item.furnitureType}, Qty: {item.quantity})
-                  {item.type && <span>, Type: {item.type}</span>}
-                </li>
-              ))}
-            </ul>
+            {/* If the order contains an items array, render it; otherwise render the single-order fields */}
+            {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? (
+              <ul className="list-disc pl-4 text-[10px]">
+                {selectedOrder.items.map((item, index) => (
+                  <li key={index}>
+                    {item.name || item.backModel || item.productModel || 'Item'} ({item.furnitureType || item.type || selectedOrder.furnitureType}, Qty: {item.quantity})
+                    {item.type && <span>, Type: {item.type}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              // single-order document shape
+              <div className="text-[10px] text-gray-700">
+                <p>
+                  <strong>Name:</strong> {selectedOrder.backModel || selectedOrder.type || selectedOrder.furnitureType || 'Item'}
+                </p>
+                <p>
+                  <strong>Qty:</strong> {selectedOrder.quantity || 0}
+                </p>
+              </div>
+            )}
             {selectedOrder.status === 'Rejected' && selectedOrder.rejectionReason && (
               <p className="text-[10px]">
                 <strong>Reason:</strong> {selectedOrder.rejectionReason}

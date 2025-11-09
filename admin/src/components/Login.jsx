@@ -44,9 +44,15 @@ const Login = ({ setToken }) => {
         toast.error(sanitizeMessage(response.data.message || 'Login failed'));
       }
     } catch (error) {
-      console.error('Login error:', error);
+      // Show useful debug info and surface server-side messages when available
+      console.error('Login error:', error.response?.data || error.message || error);
       if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
         toast.error('Unable to reach backend at ' + (backendUrl || 'http://localhost:4000') + '. Is the server running?');
+      } else if (error.response?.status === 401) {
+        // backend uses { error: 'invalid_credentials' } for auth failures
+        const srv = error.response?.data || {};
+        const serverMsg = srv.message || srv.error || srv.errorCode || JSON.stringify(srv);
+        toast.error(sanitizeMessage(serverMsg) || 'Invalid credentials. Please check your username and password.');
       } else {
         toast.error(sanitizeMessage(error.response?.data?.message) || 'Login failed. Please try again.');
       }
@@ -69,8 +75,8 @@ const Login = ({ setToken }) => {
               onChange={(e) => setEmail(e.target.value)}
               value={email}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200"
-              type="email"
-              placeholder="your@email.com"
+              type="text"
+              placeholder="username or email"
               required
             />
           </div>

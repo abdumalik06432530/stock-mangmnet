@@ -180,6 +180,14 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
           )
         );
         toast.success('Order marked as delivered and stock updated');
+        // Notify shop stock UI to refresh if this order belongs to a shop
+        try {
+          const orderObj = orders.find((o) => o._id === orderId) || res.data.order;
+          const shopId = orderObj?.shop || orderObj?.shopId || res.data.item?.shop;
+          if (shopId) window.dispatchEvent(new CustomEvent('shop:fetchStock', { detail: { shopId, item: res.data.item || null } }));
+        } catch (e) {
+          // ignore
+        }
       } else {
         toast.error(res.data.message || 'Failed to mark as delivered');
       }

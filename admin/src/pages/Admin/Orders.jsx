@@ -75,9 +75,19 @@ const Orders = ({ token }) => {
             {},
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          if (res.data.success) {
-            toast.success('Order marked as delivered');
-            await fetchAllOrders();
+            if (res.data.success) {
+              toast.success('Order marked as delivered');
+              await fetchAllOrders();
+              // trigger shop stock refresh if an item was created/updated for a shop
+              const shopId = res.data.item?.shop || order.shop || order.shopId;
+              if (shopId) {
+                try {
+                  // include the updated item in the event so listeners can apply an optimistic delta
+                  window.dispatchEvent(new CustomEvent('shop:fetchStock', { detail: { shopId, item: res.data.item || null } }));
+                } catch (err) {
+                  console.warn('failed to dispatch shop:fetchStock', err);
+                }
+              }
           } else {
             toast.error(res.data.message || 'Failed to mark delivered');
           }

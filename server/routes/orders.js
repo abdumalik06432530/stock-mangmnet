@@ -213,17 +213,18 @@ router.put('/:id/deliver', async (req, res) => {
     // Only update finished products (chairs, tables, shelves) not accessory components
     const furnitureKey = (order.furnitureType || order.type || '').toString().toLowerCase();
     const finishedTypes = ['chair', 'chairs', 'table', 'tables', 'shelf', 'shelves', 'cabinet', 'desk'];
+    let updatedItem = null;
     if (order.shop && finishedTypes.includes(furnitureKey)) {
       const model = order.backModel || order.model || order.type || order.furnitureType || 'finished';
-      // try to find existing Item for this shop and model
+      // Atomically increment (or create) the shop-specific Item using upsert to avoid races
       const query = { shop: order.shop, model };
-      let item = await Item.findOne(query);
-      if (!item) {
-        item = new Item({ type: 'product', model, furnitureType: order.furnitureType || order.type, shop: order.shop, quantity: order.quantity || 0 });
-      } else {
-        item.quantity = (item.quantity || 0) + (order.quantity || 0);
-      }
-      await item.save();
+      const update = {
+        $inc: { quantity: Number(order.quantity || 0) },
+        $setOnInsert: { type: 'product', model, furnitureType: order.furnitureType || order.type, shop: order.shop }
+      };
+      const opts = { new: true, upsert: true };
+      const item = await Item.findOneAndUpdate(query, update, opts);
+      updatedItem = item;
     } else {
       // fallback: if order corresponds to a product model/backModel, increment global Product.quantity (legacy)
       if (order.backModel) {
@@ -235,7 +236,7 @@ router.put('/:id/deliver', async (req, res) => {
       }
     }
 
-    return res.json({ success: true, order });
+    return res.json({ success: true, order, item: updatedItem || null });
   } catch (err) {
     console.error('deliver order error', err);
     res.status(500).json({ success: false, message: 'server_error' });

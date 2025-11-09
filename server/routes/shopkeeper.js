@@ -22,6 +22,7 @@ router.post('/orders/:id/deliver', async (req, res) => {
     await order.save();
 
     // If the order corresponds to a product model/backModel, increment finished product stock
+    let shopUpdated = null;
     if (order.backModel) {
       const prod = await Product.findOne({ $or: [{ subCategory: order.backModel }, { model: order.backModel }, { name: order.backModel }] });
       if (prod) {
@@ -34,9 +35,11 @@ router.post('/orders/:id/deliver', async (req, res) => {
             if (shopProduct) {
               shopProduct.quantity = (shopProduct.quantity || 0) + (order.quantity || 0);
               await shopProduct.save();
+              shopUpdated = shopProduct;
             } else {
               const it = new Item({ type: 'product', model: prod.model || prod.subCategory || prod.name, furnitureType: prod.category || '', quantity: order.quantity || 0, shop: order.shop });
               await it.save();
+              shopUpdated = it;
             }
           }
         } catch (e) {
@@ -45,7 +48,7 @@ router.post('/orders/:id/deliver', async (req, res) => {
       }
     }
 
-    return res.json({ success: true, order });
+    return res.json({ success: true, order, item: shopUpdated });
   } catch (err) {
     console.error('shopkeeper deliver error', err);
     res.status(500).json({ success: false, message: 'server_error' });

@@ -52,14 +52,36 @@ const StockControl = ({ token, shopId }) => {
         return `${it.type}`;
       };
 
+      // Items to always hide from StockControl list (accessories/components)
+      const excluded = new Set([
+        'arm',
+        'mechanism',
+        'headrest',
+        'castor',
+        'chrome',
+        'gaslift',
+        'cupholder',
+        'office chair_(back)',
+        'back'
+      ].map((s) => s.toLowerCase()));
+
       for (const it of items) {
-        // If viewing a specific shop, show only finished products (type === 'product').
-        // Accessories/components (arms, mechanisms, backs, etc.) are stored as
-        // Items too but should be hidden from the shop-level product view per
-        // the user's request.
-        if (shopId && String((it.type || '')).toLowerCase() !== 'product') continue;
+        // If viewing a specific shop, show only finished products (type === 'product')
+        // and limit to finished furniture (chairs) only — hide accessory/component
+        // stocks such as arms, mechanisms, castors, etc.
+        if (shopId) {
+          if (String((it.type || '')).toLowerCase() !== 'product') continue;
+          const ft = (it.furnitureType || it.type || it.model || '').toString().toLowerCase();
+          // Only include chairs for shop-level stock view. If you want to include
+          // other finished goods (tables, shelves), add them to this list.
+          if (!['chair', 'chairs'].includes(ft) && !(String(it.model || '').toLowerCase().includes('chair'))) continue;
+        }
 
         const label = labelFor(it).replace(/\s+/g, '_').toLowerCase();
+        // hide explicit excluded accessory items from the stock control view
+        const rawType = (it.type || '').toString().toLowerCase();
+        const rawModel = (it.model || '').toString().toLowerCase();
+        if (excluded.has(rawType) || excluded.has(rawModel)) continue;
         map[label] = (map[label] || 0) + (Number(it.quantity || 0));
       }
 
@@ -91,6 +113,27 @@ const StockControl = ({ token, shopId }) => {
     const handler = (e) => {
       try {
         const targetShopId = e?.detail?.shopId;
+        // If the event contains an updated `item`, apply it optimistically to the local stock map
+        const updatedItem = e?.detail?.item;
+        if (updatedItem && String(updatedItem.shop) === String(shopId)) {
+          // compute label used by this component
+          const labelFor = (it) => {
+            if (!it) return 'unknown';
+            if (it.type === 'back' && it.model) return `${it.model} (back)`;
+            if (it.model) return `${it.model} (${it.type})`;
+            return `${it.type}`;
+          };
+          const label = labelFor(updatedItem).replace(/\s+/g, '_').toLowerCase();
+          setStock((prev) => {
+            const next = { ...prev };
+            next[label] = (Number(next[label] || 0) + Number(updatedItem.quantity || 0));
+            return next;
+          });
+          // also exit early (we already applied update)
+          return;
+        }
+
+        // otherwise, if the event targets this shop (or has no target), refresh
         if (!targetShopId || targetShopId === shopId) {
           fetchStock();
         }

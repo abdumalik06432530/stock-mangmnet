@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import axios from 'axios';
 import Navbar from "./components/Navbar";
 import FactorySidebar from "./components/factorysidebar";
 import Sidebar from "./components/Sidebar";
@@ -51,6 +52,19 @@ const App = () => {
   useEffect(() => {
     localStorage.setItem("token", token);
     console.log("Token set to: ", token);
+  }, [token]);
+
+  // Configure axios default Authorization header when token changes so
+  // all components automatically send the bearer token.
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common = axios.defaults.headers.common || {};
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      axios.defaults.headers.post = axios.defaults.headers.post || {};
+      axios.defaults.headers.post['Content-Type'] = 'application/json';
+    } else {
+      try { delete axios.defaults.headers.common['Authorization']; } catch (e) { console.warn('Failed to remove default auth header', e); }
+    }
   }, [token]);
 
   return (
