@@ -115,6 +115,7 @@ const StockControl = ({ token, shopId }) => {
         const targetShopId = e?.detail?.shopId;
         // If the event contains an updated `item`, apply it optimistically to the local stock map
         const updatedItem = e?.detail?.item;
+        const delta = Number(e?.detail?.delta || 0);
         if (updatedItem && String(updatedItem.shop) === String(shopId)) {
           // compute label used by this component
           const labelFor = (it) => {
@@ -126,7 +127,12 @@ const StockControl = ({ token, shopId }) => {
           const label = labelFor(updatedItem).replace(/\s+/g, '_').toLowerCase();
           setStock((prev) => {
             const next = { ...prev };
-            next[label] = (Number(next[label] || 0) + Number(updatedItem.quantity || 0));
+            if (delta && delta !== 0) {
+              next[label] = (Number(next[label] || 0) + delta);
+            } else {
+              // if delta not provided, fallback to using returned item.quantity as authoritative
+              next[label] = Number(updatedItem.quantity || next[label] || 0);
+            }
             return next;
           });
           // also exit early (we already applied update)

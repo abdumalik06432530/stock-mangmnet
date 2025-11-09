@@ -184,7 +184,10 @@ const OrdersTab = ({ orders: initialOrders, setOrders, loading, drivers, token }
         try {
           const orderObj = orders.find((o) => o._id === orderId) || res.data.order;
           const shopId = orderObj?.shop || orderObj?.shopId || res.data.item?.shop;
-          if (shopId) window.dispatchEvent(new CustomEvent('shop:fetchStock', { detail: { shopId, item: res.data.item || null } }));
+          if (shopId) {
+            const delta = Number(orderObj?.quantity || res.data.item?.quantity || 0);
+            window.dispatchEvent(new CustomEvent('shop:fetchStock', { detail: { shopId, item: res.data.item || null, delta } }));
+          }
         } catch (e) {
           // ignore
         }
