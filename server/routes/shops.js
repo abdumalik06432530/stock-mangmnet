@@ -18,8 +18,8 @@ router.get('/', async (req, res) => {
 // GET /api/shops/:shopId/stock - return aggregated stock data (based on Item collection)
 router.get('/:shopId/stock', async (req, res) => {
   try {
-    // For now, items are global; return item quantities keyed by type and model
-    const items = await Item.find().lean();
+    // Return shop-specific finished product stock aggregated by type/model
+    const items = await Item.find({ shop: req.params.shopId, type: 'product' }).lean();
     const stock = {};
     items.forEach((it) => {
       const key = it.model ? `${it.type}_${it.model}` : it.type;

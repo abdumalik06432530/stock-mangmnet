@@ -209,14 +209,29 @@ router.put('/:id/deliver', async (req, res) => {
     order.deliveredAt = new Date();
     await pushAudit(order, 'system', 'system', 'delivered', 'Order marked as delivered');
     await order.save();
-
-    // If order has a backModel and furniture type is Chair, increment matching Product.quantity
-    if (order.furnitureType === 'Chair' || (order.type && order.type.toLowerCase() === 'chair')) {
-      // find product by subCategory/model or name matching backModel
-      const prod = await Product.findOne({ $or: [{ subCategory: order.backModel }, { model: order.backModel }, { name: order.backModel }] });
-      if (prod) {
-        prod.quantity = (prod.quantity || 0) + (order.quantity || 0);
-        await prod.save();
+    // If this order belongs to a shop, create/update shop-specific finished-product Item records
+    // Only update finished products (chairs, tables, shelves) not accessory components
+    const furnitureKey = (order.furnitureType || order.type || '').toString().toLowerCase();
+    const finishedTypes = ['chair', 'chairs', 'table', 'tables', 'shelf', 'shelves', 'cabinet', 'desk'];
+    if (order.shop && finishedTypes.includes(furnitureKey)) {
+      const model = order.backModel || order.model || order.type || order.furnitureType || 'finished';
+      // try to find existing Item for this shop and model
+      const query = { shop: order.shop, model };
+      let item = await Item.findOne(query);
+      if (!item) {
+        item = new Item({ type: 'product', model, furnitureType: order.furnitureType || order.type, shop: order.shop, quantity: order.quantity || 0 });
+      } else {
+        item.quantity = (item.quantity || 0) + (order.quantity || 0);
+      }
+      await item.save();
+    } else {
+      // fallback: if order corresponds to a product model/backModel, increment global Product.quantity (legacy)
+      if (order.backModel) {
+        const prod = await Product.findOne({ $or: [{ subCategory: order.backModel }, { model: order.backModel }, { name: order.backModel }] });
+        if (prod) {
+          prod.quantity = (prod.quantity || 0) + (order.quantity || 0);
+          await prod.save();
+        }
       }
     }
 

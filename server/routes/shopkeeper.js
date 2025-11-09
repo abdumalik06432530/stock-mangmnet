@@ -58,21 +58,44 @@ router.post('/sales', async (req, res) => {
     const { shop, productId, productModel, quantity, customerName, customerPhone, customerAddress } = req.body;
     const qty = Number(quantity || 0);
     if (!qty || qty <= 0) return res.status(400).json({ success: false, message: 'invalid_quantity' });
+      // Prefer shop-specific Item stock when shop is provided
+      if (shop) {
+        // Try to resolve Item by id first
+        let item = null;
+        if (productId) {
+          item = await Item.findById(productId);
+          if (item && String(item.shop) !== String(shop)) item = null; // ignore if not matching shop
+        }
+        if (!item && productModel) {
+          item = await Item.findOne({ shop, model: productModel });
+        }
 
-    let prod = null;
-    if (productId) prod = await Product.findById(productId);
-    else if (productModel) prod = await Product.findOne({ $or: [{ model: productModel }, { subCategory: productModel }, { name: productModel }] });
-    if (!prod) return res.status(404).json({ success: false, message: 'product_not_found' });
+        if (item) {
+          if ((item.quantity || 0) < qty) return res.status(400).json({ success: false, message: 'insufficient_stock' });
+          item.quantity -= qty;
+          await item.save();
+          const sale = new Sale({ shop, product: null, productModel: item.model || productModel, quantity: qty, customerName, customerPhone, customerAddress });
+          await sale.save();
+          return res.json({ success: true, sale, item });
+        }
+        // otherwise fallthrough to global Product check
+      }
 
-    if ((prod.quantity || 0) < qty) return res.status(400).json({ success: false, message: 'insufficient_stock' });
+      // Fallback: use global Product stock
+      let prod = null;
+      if (productId) prod = await Product.findById(productId);
+      else if (productModel) prod = await Product.findOne({ $or: [{ model: productModel }, { subCategory: productModel }, { name: productModel }] });
+      if (!prod) return res.status(404).json({ success: false, message: 'product_not_found' });
 
-    prod.quantity -= qty;
-    await prod.save();
+      if ((prod.quantity || 0) < qty) return res.status(400).json({ success: false, message: 'insufficient_stock' });
 
-    const sale = new Sale({ shop, product: prod._id, productModel: prod.model || prod.name, quantity: qty, customerName, customerPhone, customerAddress });
-    await sale.save();
+      prod.quantity -= qty;
+      await prod.save();
 
-    return res.json({ success: true, sale, product: prod });
+      const sale = new Sale({ shop, product: prod._id, productModel: prod.model || prod.name, quantity: qty, customerName, customerPhone, customerAddress });
+      await sale.save();
+
+      return res.json({ success: true, sale, product: prod });
   } catch (err) {
     console.error('shopkeeper sales error', err);
     res.status(500).json({ success: false, message: 'server_error' });
@@ -89,7 +112,11 @@ router.get('/stock', async (req, res) => {
     // records (delivered finished products are created as Item documents
     // tied to the receiving shop).
     const query = {};
-    if (shop) query.shop = shop;
+    if (shop) {
+      query.shop = shop;
+      // Only expose finished products to shops (hide accessory/component stocks)
+      query.type = 'product';
+    }
     const items = await Item.find(query).lean();
     return res.json({ success: true, items });
   } catch (err) {
@@ -119,7 +146,7 @@ router.delete('/sales/:id', async (req, res) => {
     const sale = await Sale.findById(id);
     if (!sale) return res.status(404).json({ success: false, message: 'sale_not_found' });
 
-    // restore product quantity if referenced
+    // restore product or shop item quantity if referenced
     if (sale.product) {
       const prod = await Product.findById(sale.product);
       if (prod) {
@@ -127,10 +154,26 @@ router.delete('/sales/:id', async (req, res) => {
         await prod.save();
       }
     } else if (sale.productModel) {
-      const prod = await Product.findOne({ $or: [{ model: sale.productModel }, { subCategory: sale.productModel }, { name: sale.productModel }] });
-      if (prod) {
-        prod.quantity = (prod.quantity || 0) + (sale.quantity || 0);
-        await prod.save();
+      // prefer restoring shop Item if sale.shop is present
+      if (sale.shop) {
+        const item = await Item.findOne({ shop: sale.shop, model: sale.productModel });
+        if (item) {
+          item.quantity = (item.quantity || 0) + (sale.quantity || 0);
+          await item.save();
+        } else {
+          // fallback to global product
+          const prod = await Product.findOne({ $or: [{ model: sale.productModel }, { subCategory: sale.productModel }, { name: sale.productModel }] });
+          if (prod) {
+            prod.quantity = (prod.quantity || 0) + (sale.quantity || 0);
+            await prod.save();
+          }
+        }
+      } else {
+        const prod = await Product.findOne({ $or: [{ model: sale.productModel }, { subCategory: sale.productModel }, { name: sale.productModel }] });
+        if (prod) {
+          prod.quantity = (prod.quantity || 0) + (sale.quantity || 0);
+          await prod.save();
+        }
       }
     }
 

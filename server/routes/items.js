@@ -81,12 +81,20 @@ router.put('/requests/:id/reject', async (req, res) => {
 });
 
 // GET /api/items - optional query ?shop=shopId to list shop-specific items; otherwise returns global items
+// When `shop` is provided, only return finished-product Items (type === 'product') so shops
+// do not see accessory/component stocks in their visible inventory.
 router.get('/', async (req, res) => {
   try {
     const { shop } = req.query;
     const q = {};
-    if (shop) q.shop = shop;
-    else q.shop = null; // default to global items only
+    if (shop) {
+      q.shop = shop;
+      // Only finished products should be visible to shops
+      q.type = 'product';
+    } else {
+      // default to global items only (components/accessories)
+      q.shop = null;
+    }
     const items = await Item.find(q).lean();
     return res.json({ success: true, items });
   } catch (err) {
