@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -33,12 +33,12 @@ const StockControl = ({ token, shopId }) => {
   const fetchStock = useCallback(async () => {
     setIsFetching(true);
     try {
-      // Prefer fetching items (components, backs, etc.) and aggregate into a simple stock map
-      // If a shopId is provided, prefer fetching shop-specific items which include
-      // both accessories and delivered finished-products (created as Item records
-      // tied to the shop). When no shopId is present, fall back to fetching
-      // global items and products separately.
-      const itemsUrl = `${backendUrl}/api/items${shopId ? `?shop=${shopId}` : ''}`;
+      // For shop stock, read the dedicated shopkeeper stock endpoint which
+      // returns shop-visible Items (finished products delivered to this shop).
+      // Fall back to global items list when no shopId is present.
+      const itemsUrl = shopId
+        ? `${backendUrl}/api/shopkeeper/stock?shop=${encodeURIComponent(shopId)}`
+        : `${backendUrl}/api/items`;
       const itemsRes = await axios.get(itemsUrl, { headers: { Authorization: `Bearer ${token}` } });
 
       const items = Array.isArray(itemsRes.data) ? itemsRes.data : (itemsRes.data.items || []);
@@ -89,8 +89,41 @@ const StockControl = ({ token, shopId }) => {
       // delivered to a shop are represented as Items of type 'product' tied
       // to that shop, so there's no need to read from the global products DB
       // for shop-visible stock.
-
       setStock(map);
+
+      // Auto-backfill: If this is a shop view, stock is empty, and we haven't
+      // attempted a backfill yet, call the backfill endpoint to populate any
+      // previously delivered orders (e.g., those marked delivered directly via
+      // database or older flows) and then re-fetch.
+      if (shopId && Object.keys(map).length === 0 && !attemptedBackfillRef.current) {
+        attemptedBackfillRef.current = true;
+        try {
+          await axios.post(`${backendUrl}/api/shopkeeper/orders/backfill-delivered`, { shop: shopId }, {
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          });
+          // Re-fetch after backfill
+          const refreshed = await axios.get(`${backendUrl}/api/shopkeeper/stock?shop=${encodeURIComponent(shopId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const refreshedItems = Array.isArray(refreshed.data) ? refreshed.data : (refreshed.data.items || []);
+          const refreshedMap = {};
+          for (const it of refreshedItems) {
+            if (String((it.type || '')).toLowerCase() !== 'product') continue;
+            const labelFor = (item) => {
+              if (!item) return 'unknown';
+              if (item.type === 'back' && item.model) return `${item.model} (back)`;
+              if (item.model) return `${item.model} (${item.type})`;
+              return `${item.type}`;
+            };
+            const label = labelFor(it).replace(/\s+/g, '_').toLowerCase();
+            refreshedMap[label] = (refreshedMap[label] || 0) + (Number(it.quantity || 0));
+          }
+          setStock(refreshedMap);
+        } catch (bfErr) {
+          // Silent failure; user can still manually refresh.
+          console.warn('Backfill attempt failed or no delivered orders found', bfErr?.message || bfErr);
+        }
+      }
     } catch (error) {
       // fallback to local simulation if server endpoints are unreachable
       try {
@@ -104,8 +137,21 @@ const StockControl = ({ token, shopId }) => {
     }
   }, [shopId, token]);
 
+  // Ref to avoid repeated backfill loops
+  const attemptedBackfillRef = useRef(false);
+
   useEffect(() => {
     fetchStock();
+  }, [fetchStock]);
+
+  // Light auto-refresh: poll periodically to reflect newly delivered orders
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchStock();
+      }
+    }, 15000); // 15s
+    return () => clearInterval(interval);
   }, [fetchStock]);
 
   // Listen for sidebar-triggered prefetch events
@@ -264,7 +310,7 @@ const StockControl = ({ token, shopId }) => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-extrabold text-gray-900">Stock Control</h2>
-            <p className="text-gray-600 text-[11px]">Monitor and manage your shop inventory</p>
+            <p className="text-gray-600 text-[11px]">Monitor and manage your shop inventory — updates automatically after orders are delivered</p>
           </div>
           <div className="flex items-center space-x-2">
             {lowStockItems.length > 0 && (
