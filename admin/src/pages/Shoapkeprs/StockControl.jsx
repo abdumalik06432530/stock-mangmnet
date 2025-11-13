@@ -29,115 +29,38 @@ const StockControl = ({ token, shopId }) => {
   // Predefined categories
   const predefinedCategories = ['Chair', 'Table', 'Shelf', 'Others'];
 
-  // Fetch stock
+  // Fetch stock (Products only)
   const fetchStock = useCallback(async () => {
     setIsFetching(true);
     try {
-      // For shop stock, read the dedicated shopkeeper stock endpoint which
-      // returns shop-visible Items (finished products delivered to this shop).
-      // Fall back to global items list when no shopId is present.
-      const itemsUrl = shopId
-        ? `${backendUrl}/api/shopkeeper/stock?shop=${encodeURIComponent(shopId)}`
-        : `${backendUrl}/api/items`;
-      const itemsRes = await axios.get(itemsUrl, { headers: { Authorization: `Bearer ${token}` } });
+      // Always fetch products and show their computed quantities.
+      const res = await axios.post(`${backendUrl}/api/product/list`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const products = Array.isArray(res.data?.products) ? res.data.products : [];
 
-      const items = Array.isArray(itemsRes.data) ? itemsRes.data : (itemsRes.data.items || []);
-
-      // build a simple stock map: label -> total quantity
+      // Build stock map: product label -> quantity
       const map = {};
-      const labelFor = (it) => {
-        if (!it) return 'unknown';
-        if (it.type === 'back' && it.model) return `${it.model} (back)`;
-        if (it.model) return `${it.model} (${it.type})`;
-        return `${it.type}`;
-      };
-
-      // Items to always hide from StockControl list (accessories/components)
-      const excluded = new Set([
-        'arm',
-        'mechanism',
-        'headrest',
-        'castor',
-        'chrome',
-        'gaslift',
-        'cupholder',
-        'office chair_(back)',
-        'back'
-      ].map((s) => s.toLowerCase()));
-
-      for (const it of items) {
-        // If viewing a specific shop, show only finished products (type === 'product')
-        // and limit to finished furniture (chairs) only — hide accessory/component
-        // stocks such as arms, mechanisms, castors, etc.
-        if (shopId) {
-          if (String((it.type || '')).toLowerCase() !== 'product') continue;
-          const ft = (it.furnitureType || it.type || it.model || '').toString().toLowerCase();
-          // Only include chairs for shop-level stock view. If you want to include
-          // other finished goods (tables, shelves), add them to this list.
-          if (!['chair', 'chairs'].includes(ft) && !(String(it.model || '').toLowerCase().includes('chair'))) continue;
-        }
-
-        const label = labelFor(it).replace(/\s+/g, '_').toLowerCase();
-        // hide explicit excluded accessory items from the stock control view
-        const rawType = (it.type || '').toString().toLowerCase();
-        const rawModel = (it.model || '').toString().toLowerCase();
-        if (excluded.has(rawType) || excluded.has(rawModel)) continue;
-        map[label] = (map[label] || 0) + (Number(it.quantity || 0));
+      for (const p of products) {
+        const labelBase = p?.name || p?.model || p?.subCategory || 'product';
+        const label = String(labelBase).trim().replace(/\s+/g, '_').toLowerCase();
+        map[label] = Number(p?.quantity || 0);
       }
-
-      // Note: we use Items collection only. Finished products that were
-      // delivered to a shop are represented as Items of type 'product' tied
-      // to that shop, so there's no need to read from the global products DB
-      // for shop-visible stock.
       setStock(map);
-
-      // Auto-backfill: If this is a shop view, stock is empty, and we haven't
-      // attempted a backfill yet, call the backfill endpoint to populate any
-      // previously delivered orders (e.g., those marked delivered directly via
-      // database or older flows) and then re-fetch.
-      if (shopId && Object.keys(map).length === 0 && !attemptedBackfillRef.current) {
-        attemptedBackfillRef.current = true;
-        try {
-          await axios.post(`${backendUrl}/api/shopkeeper/orders/backfill-delivered`, { shop: shopId }, {
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          });
-          // Re-fetch after backfill
-          const refreshed = await axios.get(`${backendUrl}/api/shopkeeper/stock?shop=${encodeURIComponent(shopId)}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const refreshedItems = Array.isArray(refreshed.data) ? refreshed.data : (refreshed.data.items || []);
-          const refreshedMap = {};
-          for (const it of refreshedItems) {
-            if (String((it.type || '')).toLowerCase() !== 'product') continue;
-            const labelFor = (item) => {
-              if (!item) return 'unknown';
-              if (item.type === 'back' && item.model) return `${item.model} (back)`;
-              if (item.model) return `${item.model} (${item.type})`;
-              return `${item.type}`;
-            };
-            const label = labelFor(it).replace(/\s+/g, '_').toLowerCase();
-            refreshedMap[label] = (refreshedMap[label] || 0) + (Number(it.quantity || 0));
-          }
-          setStock(refreshedMap);
-        } catch (bfErr) {
-          // Silent failure; user can still manually refresh.
-          console.warn('Backfill attempt failed or no delivered orders found', bfErr?.message || bfErr);
-        }
-      }
     } catch (error) {
       // fallback to local simulation if server endpoints are unreachable
       try {
         const sim = shopkeeperSim.getStock(shopId);
         setStock(sim || {});
       } catch (e) {
-        toast.error(sanitizeMessage(e.message) || 'Failed to fetch stock data');
+        toast.error(sanitizeMessage(error.response?.data?.message) || 'Failed to fetch product stock');
       }
     } finally {
       setIsFetching(false);
     }
   }, [shopId, token]);
 
-  // Ref to avoid repeated backfill loops
+  // Ref kept for future extension (no backfill with Products-only view)
   const attemptedBackfillRef = useRef(false);
 
   useEffect(() => {

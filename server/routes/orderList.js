@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
+const adminOrders = require('../controllers/adminOrdersController');
 
 // GET /api/order/list
 router.get('/list', async (req, res) => {
@@ -25,3 +26,6 @@ router.post('/list', async (req, res) => {
 });
 
 module.exports = router;
+
+// POST /api/order/delete - used by admin Orders page
+router.post('/delete', adminOrders.remove);

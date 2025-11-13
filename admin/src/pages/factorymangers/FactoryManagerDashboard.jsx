@@ -36,19 +36,16 @@ const FactoryManagerDashboard = ({ token = null }) => {
       const results = await Promise.allSettled([
         axios.get(`${backendUrl}/api/orders`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${backendUrl}/api/product/list`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${backendUrl}/api/items`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${backendUrl}/api/drivers`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
       ]);
 
       const ordersRes = results[0].status === 'fulfilled' ? results[0].value : null;
-      const productsRes = results[1].status === 'fulfilled' ? results[1].value : null;
-      const itemsRes = results[2].status === 'fulfilled' ? results[2].value : null;
-      const driversRes = results[3] && results[3].status === 'fulfilled' ? results[3].value : null;
+  const productsRes = results[1].status === 'fulfilled' ? results[1].value : null;
+  const driversRes = results[2] && results[2].status === 'fulfilled' ? results[2].value : null;
 
       setOrders((ordersRes && (ordersRes.data.orders || ordersRes.data)) || []);
 
-      const products = (productsRes && (productsRes.data.products || productsRes.data)) || [];
-      const items = (itemsRes && (itemsRes.data.items || itemsRes.data)) || [];
+  const products = (productsRes && (productsRes.data.products || productsRes.data)) || [];
 
       const normalizedProducts = products.map((p) => ({
         _id: p._id,
@@ -60,16 +57,8 @@ const FactoryManagerDashboard = ({ token = null }) => {
         description: p.description || ''
       }));
 
-      const normalizedItems = items.map((it) => ({
-        _id: it._id,
-        name: it.model || it.type || 'Accessory',
-        type: it.type,
-        furnitureType: it.furnitureType,
-        quantity: Number(it.quantity || 0),
-        description: it.description || ''
-      }));
-
-      setStock([...normalizedProducts, ...normalizedItems]);
+      // Only products should be shown in stock views
+      setStock([...normalizedProducts]);
       setDrivers((driversRes && (driversRes.data.drivers || driversRes.data)) || []);
     } catch (err) {
       console.error('Failed to load data', err);

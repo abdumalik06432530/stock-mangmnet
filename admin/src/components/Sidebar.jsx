@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { LayoutDashboard, Plus, List, Package, Users, User } from 'lucide-react';
+import { LayoutDashboard, Plus, List, Package, Users, User, Clock } from 'lucide-react';
 
 const Sidebar = () => {
   return (
@@ -10,6 +10,8 @@ const Sidebar = () => {
         <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
         <SidebarLink to="/add" icon={Plus} label="Add Items" />
         <SidebarLink to="/list" icon={List} label="List Items" />
+        <SidebarLink to="/admin/item-requests" icon={List} label="Item Requests" />
+        <SidebarLink to="/admin/pending-orders" icon={Clock} label="Pending Orders" />
         <SidebarLink to="/orders" icon={Package} label="Orders" />
         <SidebarLink to="/users" icon={Users} label="Users" />
         <SidebarLink to="/profile" icon={User} label="Profile" />

@@ -23,6 +23,7 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 import AccessoriesPage from "./pages/Admin/AccessoriesPage";
 import ItemRequests from "./pages/Admin/ItemRequests";
+import PendingOrders from "./pages/Admin/PendingOrders";
 import RequestItem from "./pages/Shoapkeprs/RequestItem";
 // import SuperAdminDashboard from "./pages/superAdmin/superadmin";
 import { ToastContainer } from "react-toastify";
@@ -99,6 +100,7 @@ const App = () => {
                 <Route path="/users" element={<Users token={token} />} />
                 <Route path="/admin/accessories/:productId" element={<AccessoriesPage />} />
                 <Route path="/admin/item-requests" element={<ItemRequests token={token} />} />
+                <Route path="/admin/pending-orders" element={<PendingOrders token={token} />} />
                 <Route path="/shopkeepers" element={<ShopkeeperDashboard token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/dashboard" element={<DashboardOverview token={token} shopId={shopId} />} />
                 <Route path="/shopkeepers/orders" element={<OrderManagement token={token} shopId={shopId} />} />

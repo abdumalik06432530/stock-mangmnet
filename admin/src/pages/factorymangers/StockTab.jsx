@@ -929,7 +929,7 @@ const ApprovalStockList = ({ token, stock, fetchStock }) => {
                         if (newName && newName !== item.name) {
                           axios
                             .put(
-                              `${backendUrl}/api/factory/stock/${item._id}`,
+                              `${backendUrl}/api/product/${item._id}`,
                               { name: newName },
                               { headers: { Authorization: `Bearer ${token}` } }
                             )
