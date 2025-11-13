@@ -15,6 +15,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/shops/:shopId - get single shop details
+router.get('/:shopId', async (req, res) => {
+  try {
+    const { shopId } = req.params;
+    const shop = await Shop.findById(shopId).lean();
+    if (!shop) return res.status(404).json({ success: false, message: 'not_found' });
+    return res.json({ success: true, shop });
+  } catch (err) {
+    console.error('shop get error', err);
+    res.status(500).json({ success: false, message: 'server_error' });
+  }
+});
+
 // GET /api/shops/:shopId/stock - return aggregated stock data (based on Item collection)
 router.get('/:shopId/stock', async (req, res) => {
   try {
